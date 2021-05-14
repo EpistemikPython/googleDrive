@@ -58,12 +58,12 @@ def get_credentials():
 
 class MhsDriveAccess:
     """Start a locked session, read/write to my google drive, end the session."""
-    # prevent different instances/threads from writing at the same time
-    _lock = threading.Lock()
-
     def __init__(self, p_logger:lg.Logger=None):
         self._lgr = p_logger if p_logger else get_simple_logger(self.__class__.__name__)
+        # TODO: need this?
         self._data = list()
+        # prevent different instances/threads from writing at the same time
+        self._lock = threading.Lock()
         self._lgr.info(F"Launch {self.__class__.__name__} instance with lock = {str(self._lock)} at {get_current_time()}")
 
     def get_data(self) -> list:
@@ -71,10 +71,9 @@ class MhsDriveAccess:
 
     # noinspection PyAttributeOutsideInit
     def begin_session(self):
-        # PREVENT starting a separate session to the drive
+        # ACTIVATE a UNIQUE session to the drive
         self._lock.acquire()
-
-        self._lgr.info(F"acquired lock at {get_current_time()}")
+        self._lgr.info(F"acquired Drive lock at {get_current_time()}")
         creds = get_credentials()
         service = build("drive", "v3", credentials = creds)
         self.fserv = service.files()
@@ -82,8 +81,9 @@ class MhsDriveAccess:
     def end_session(self):
         # RELEASE this drive session
         self._lock.release()
-        self._lgr.debug(F"released lock at {get_current_time()}")
+        self._lgr.debug(F"released Drive lock at {get_current_time()}")
 
+    # TODO: need this?
     def __get_file_id(self, fn:str) -> str:
         """Get the file id string from the file in the secrets folder."""
         with open(fn, "r") as gfp:
@@ -92,44 +92,51 @@ class MhsDriveAccess:
         return fid
 
     def send_file(self, filepath:str):
-        """
-        SEND a file to my Google drive
-        :return: server response
+        """SEND a file to my Google drive
+        :return server response
         """
         self._lgr.debug( get_current_time() )
         if not self.fserv:
             self._lgr.exception("No Session started!")
+            return
+        try:
+            file_metadata = {"name":get_base_filename(filepath)}
+            media = MediaFileUpload(filepath, mimetype = "text/plain", resumable = True)
 
-        file_metadata = {"name":get_base_filename(filepath)}
-        media = MediaFileUpload(filepath, mimetype = "text/plain", resumable = True)
+            file = self.fserv.create(body = file_metadata, media_body = media, fields = "id").execute()
 
-        file = self.fserv.create(body = file_metadata, media_body = media, fields = "id").execute()
+            response = file.get('id')
+            self._lgr.info(F"File ID: {response}")
+        except Exception as sfe:
+            response = repr(sfe)
+            self._lgr.error(response)
 
-        response = file.get('id')
-        self._lgr.info(F"File ID: {response}")
         return response
 
-    def read_file_info(self, range_name:str) -> list:
-        """
-        READ data from my Google drive
-        :return: server response
-        """
+    def read_file_info(self, p_range:int):
+        """READ data from my Google drive."""
         self._lgr.debug( get_current_time() )
         if not self.fserv:
             self._lgr.exception("No Session started!")
+            return
         try:
-            response = self.fserv.get(spreadsheetId = self.__get_file_id(range_name), range = range_name).execute()
-            rows = response.get("values", [])
-            self._lgr.info(F"{len(rows)} rows retrieved.\n")
-        except Exception as rsde:
-            msg = repr(rsde)
-            self._lgr.error(msg)
-            rows = [msg]
-        return rows
+            results = self.fserv.list( pageSize = p_range,
+                                       fields = "nextPageToken, files(id, name)").execute()
+            items = results.get("files", [])
+            if not items:
+                print("No files found?!")
+            else:
+                print("Files:")
+                for item in items:
+                    print(F"{item['name']} ({item['id']})")
+            self._lgr.info(F"{len(items)} files retrieved.\n")
+        except Exception as rde:
+            self._lgr.error(repr(rde))
 
     def test_send(self, file_name:str) -> dict:
         self.begin_session()
         result = self.send_file(file_name)
+        self._lgr.info(result)
         self.end_session()
         return result
 
@@ -138,13 +145,13 @@ class MhsDriveAccess:
 
 def test_metadata_read():
     """Shows basic usage of the Drive v3 API.
-    Prints the names and ids of the first 10 files the user has access to.
+    Prints the names and ids of the first 25 files the user can access
     """
     creds = get_credentials()
     service = build("drive", "v3", credentials=creds)
 
     # call the Drive v3 API
-    results = service.files().list( pageSize = 10,
+    results = service.files().list( pageSize = 25,
                                     fields = "nextPageToken, files(id, name)" ).execute()
     items = results.get("files", [])
 
@@ -171,9 +178,9 @@ def test_upload(filepath:str):
     print(F"File ID: {file.get('id')}")
 
 
-def mhs_drive_access(p_filepath:str):
+def mhs_class_test(p_filepath:str):
     mhs = MhsDriveAccess()
-    response = mhs.send_file(p_filepath)
+    response = mhs.test_send(p_filepath)
     print( repr(response) )
 
 

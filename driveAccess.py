@@ -133,6 +133,27 @@ class MhsDriveAccess:
         except Exception as rde:
             self._lgr.error(repr(rde))
 
+    def find_folders(self):
+        """Find all the folders on my drive."""
+        self._lgr.debug( get_current_time() )
+        if not self.fserv:
+            self._lgr.exception("No Session started!")
+            return
+        try:
+            page_token = None
+            while True:
+                response = self.fserv.list( q = "mimeType='application/vnd.google-apps.folder'",
+                                            spaces = "drive",
+                                            fields = "nextPageToken, files(id, name)",
+                                            pageToken = page_token).execute()
+                for item in response.get('files', []):
+                    self._lgr.info(F" {item.get('name')} ({item.get('id')})")
+                page_token = response.get("nextPageToken", None)
+                if page_token is None:
+                    break
+        except Exception as ffe:
+            self._lgr.error(repr(ffe))
+
     def test_send(self, file_name:str) -> dict:
         self.begin_session()
         result = self.send_file(file_name)
@@ -179,8 +200,8 @@ def test_file_send(filepath:str):
 
 
 def mhs_class_test(p_filepath:str):
-    mhs = MhsDriveAccess()
-    response = mhs.test_send(p_filepath)
+    mhst = MhsDriveAccess()
+    response = mhst.test_send(p_filepath)
     print( repr(response) )
 
 
@@ -192,6 +213,11 @@ if __name__ == "__main__":
     if osp.exists(test_parameter):
         print(F"test file upload with '{test_parameter}'")
         test_file_send(test_parameter)
+    elif test_parameter == "folders":
+        mhs = MhsDriveAccess()
+        mhs.begin_session()
+        mhs.find_folders()
+        mhs.end_session()
     else:
         print("test metadata read:")
         test_metadata_read(test_parameter)

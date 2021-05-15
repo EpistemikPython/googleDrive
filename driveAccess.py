@@ -59,7 +59,7 @@ def get_credentials():
 class MhsDriveAccess:
     """Start a locked session, read/write to my google drive, end the session."""
     def __init__(self, p_logger:lg.Logger=None):
-        self._lgr = p_logger if p_logger else get_simple_logger(self.__class__.__name__)
+        self._lgr = p_logger if p_logger else get_simple_logger(self.__class__.__name__, level = "INFO")
         # TODO: need this?
         self._data = list()
         # prevent different instances/threads from writing at the same time
@@ -113,22 +113,22 @@ class MhsDriveAccess:
 
         return response
 
-    def read_file_info(self, p_range:int):
+    def read_file_info(self, num_items:int):
         """READ data from my Google drive."""
         self._lgr.debug( get_current_time() )
         if not self.fserv:
             self._lgr.exception("No Session started!")
             return
         try:
-            results = self.fserv.list( pageSize = p_range,
-                                       fields = "nextPageToken, files(id, name)").execute()
+            results = self.fserv.list( pageSize = num_items,
+                                       fields = "nextPageToken, files(id, name)" ).execute()
             items = results.get("files", [])
             if not items:
-                print("No files found?!")
+                self._lgr.error("No files found?!")
             else:
-                print("Files:")
+                self._lgr.info("Files:")
                 for item in items:
-                    print(F"{item['name']} ({item['id']})")
+                    self._lgr.info(F"{item['name']} ({item['id']})")
             self._lgr.info(F"{len(items)} files retrieved.\n")
         except Exception as rde:
             self._lgr.error(repr(rde))
@@ -143,15 +143,15 @@ class MhsDriveAccess:
 # END class MhsDriveAccess
 
 
-def test_metadata_read():
+def test_metadata_read(num_files:str):
     """Shows basic usage of the Drive v3 API.
-    Prints the names and ids of the first 25 files the user can access
+    Prints the names and ids of the first 'num_files' files the user can access
     """
     creds = get_credentials()
     service = build("drive", "v3", credentials=creds)
 
     # call the Drive v3 API
-    results = service.files().list( pageSize = 25,
+    results = service.files().list( pageSize = int(num_files),
                                     fields = "nextPageToken, files(id, name)" ).execute()
     items = results.get("files", [])
 
@@ -163,7 +163,7 @@ def test_metadata_read():
             print(F"{item['name']} ({item['id']})")
 
 
-def test_upload(filepath:str):
+def test_file_send(filepath:str):
     creds = get_credentials()
     service = build("drive", "v3", credentials=creds)
 
@@ -186,13 +186,13 @@ def mhs_class_test(p_filepath:str):
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
-        test_file = sys.argv[1]
+        test_parameter = sys.argv[1]
     else:
-        test_file = "0"
-    if osp.exists(test_file):
-        print(F"test file upload with '{test_file}'")
-        test_upload(test_file)
+        test_parameter = "25"
+    if osp.exists(test_parameter):
+        print(F"test file upload with '{test_parameter}'")
+        test_file_send(test_parameter)
     else:
         print("test metadata read:")
-        test_metadata_read()
+        test_metadata_read(test_parameter)
     exit()

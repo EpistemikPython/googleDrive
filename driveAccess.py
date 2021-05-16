@@ -34,6 +34,9 @@ DRIVE_ACCESS_SCOPE:list  = ["https://www.googleapis.com/auth/drive"]
 DRIVE_JSON_TOKEN:str     = "token.json"
 DRIVE_TOKEN_LOCATION:str = osp.join(SECRETS_DIR, DRIVE_JSON_TOKEN)
 
+FOLDER_IDS = {
+    "FIN": "0ByG1fXTPy1qSfk55ZjJMN0hOUlRmaDBvVFY0MEV2Qm95RHM3dUtBQVlaUjlhQ3E4UkZZZVU"
+}
 
 def get_credentials():
     """Get the proper credentials needed to access my Google drive."""
@@ -91,7 +94,7 @@ class MhsDriveAccess:
         self._lgr.debug(F"{get_current_time()} / File Id = {fid}\n")
         return fid
 
-    def send_file(self, filepath:str):
+    def send_file(self, filepath:str, parent:str=None):
         """SEND a file to my Google drive
         :return server response
         """
@@ -101,6 +104,8 @@ class MhsDriveAccess:
             return
         try:
             file_metadata = {"name":get_base_filename(filepath)}
+            if parent:
+                file_metadata["parents"] = parent
             media = MediaFileUpload(filepath, mimetype = "text/plain", resumable = True)
 
             file = self.fserv.create(body = file_metadata, media_body = media, fields = "id").execute()
@@ -144,10 +149,10 @@ class MhsDriveAccess:
             while True:
                 response = self.fserv.list( q = "mimeType='application/vnd.google-apps.folder'",
                                             spaces = "drive",
-                                            fields = "nextPageToken, files(id, name)",
-                                            pageToken = page_token).execute()
+                                            fields = "nextPageToken, files(id, name, parents)",
+                                            pageToken = page_token ).execute()
                 for item in response.get('files', []):
-                    self._lgr.info(F" {item.get('name')} ({item.get('id')})")
+                    self._lgr.info(F" {item.get('name')} ({item.get('id')}) {item.get('parents')}")
                 page_token = response.get("nextPageToken", None)
                 if page_token is None:
                     break
@@ -188,9 +193,9 @@ def test_file_send(filepath:str):
     creds = get_credentials()
     service = build("drive", "v3", credentials=creds)
 
-    file_metadata = {"name":get_base_filename(filepath)}
+    file_metadata = {"name":get_base_filename(filepath), "parents":[FOLDER_IDS['FIN']]}
     media = MediaFileUpload(filepath, mimetype = "text/plain", resumable = True)
-
+    print(F"Send to FIN ({FOLDER_IDS['FIN']})")
     file = service.files().create( body = file_metadata,
                                    # uploadType = multipart,
                                    media_body = media,
@@ -214,6 +219,7 @@ if __name__ == "__main__":
         print(F"test file upload with '{test_parameter}'")
         test_file_send(test_parameter)
     elif test_parameter == "folders":
+        print("test finding folders:")
         mhs = MhsDriveAccess()
         mhs.begin_session()
         mhs.find_folders()

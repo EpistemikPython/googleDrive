@@ -2,6 +2,7 @@
 !.gitignore
 /gnucash
 /old
+/info
 /py3bindings
 /secrets
 credentials*

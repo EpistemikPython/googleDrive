@@ -11,7 +11,7 @@ __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __google_api_python_client_py3_version__ = "1.2"
 __created__ = "2021-05-14"
-__updated__ = "2021-05-14"
+__updated__ = "2021-05-16"
 
 import sys
 import threading
@@ -23,6 +23,7 @@ from googleapiclient.http import MediaFileUpload
 sys.path.append("/newdata/dev/git/Python/utils")
 from mhsLogging import get_simple_logger
 from mhsUtils import get_base_filename, get_current_time, osp, lg
+from folder_ids import FOLDER_IDS
 
 # see https://github.com/googleapis/google-api-python-client/issues/299
 # use: e.g. build("drive", "v3", http=http, cache_discovery=False)
@@ -33,10 +34,6 @@ CREDENTIALS_FILE:str = osp.join(SECRETS_DIR, "credentials" + osp.extsep + "json"
 DRIVE_ACCESS_SCOPE:list  = ["https://www.googleapis.com/auth/drive"]
 DRIVE_JSON_TOKEN:str     = "token.json"
 DRIVE_TOKEN_LOCATION:str = osp.join(SECRETS_DIR, DRIVE_JSON_TOKEN)
-
-FOLDER_IDS = {
-    "FIN": "0ByG1fXTPy1qSfk55ZjJMN0hOUlRmaDBvVFY0MEV2Qm95RHM3dUtBQVlaUjlhQ3E4UkZZZVU"
-}
 
 def get_credentials():
     """Get the proper credentials needed to access my Google drive."""
@@ -94,23 +91,23 @@ class MhsDriveAccess:
         self._lgr.debug(F"{get_current_time()} / File Id = {fid}\n")
         return fid
 
-    def send_file(self, filepath:str, parent:str=None):
+    def send_file(self, filepath:str, parent:str=None) -> str:
         """SEND a file to my Google drive
         :return server response
         """
         self._lgr.debug( get_current_time() )
         if not self.fserv:
             self._lgr.exception("No Session started!")
-            return
+            return ""
         try:
             file_metadata = {"name":get_base_filename(filepath)}
             if parent:
-                file_metadata["parents"] = parent
+                file_metadata["parents"] = [parent]
             media = MediaFileUpload(filepath, mimetype = "text/plain", resumable = True)
+            self._lgr.info(F"Send file '{filepath}' to Drive folder: {parent if parent else 'root'}")
 
             file = self.fserv.create(body = file_metadata, media_body = media, fields = "id").execute()
-
-            response = file.get('id')
+            response = file.get("id")
             self._lgr.info(F"File ID: {response}")
         except Exception as sfe:
             response = repr(sfe)
@@ -159,7 +156,7 @@ class MhsDriveAccess:
         except Exception as ffe:
             self._lgr.error(repr(ffe))
 
-    def test_send(self, file_name:str) -> dict:
+    def test_send(self, file_name:str) -> str:
         self.begin_session()
         result = self.send_file(file_name)
         self._lgr.info(result)
@@ -193,14 +190,15 @@ def test_file_send(filepath:str):
     creds = get_credentials()
     service = build("drive", "v3", credentials=creds)
 
-    file_metadata = {"name":get_base_filename(filepath), "parents":[FOLDER_IDS['FIN']]}
+    parent_folder = FOLDER_IDS["FIN"]
+    file_metadata = {"name":get_base_filename(filepath), "parents":[parent_folder]}
     media = MediaFileUpload(filepath, mimetype = "text/plain", resumable = True)
-    print(F"Send to FIN ({FOLDER_IDS['FIN']})")
+    print(F"Send to FIN ({parent_folder})")
+
     file = service.files().create( body = file_metadata,
                                    # uploadType = multipart,
                                    media_body = media,
-                                   fields = "id").execute()
-
+                                   fields = "id" ).execute()
     print(F"File ID: {file.get('id')}")
 
 

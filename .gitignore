@@ -3,7 +3,7 @@
 /gnucash
 /old
 /info
-/py3bindings
+folder_ids.py
 /secrets
 credentials*
 token*

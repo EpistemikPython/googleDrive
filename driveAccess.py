@@ -102,22 +102,24 @@ class MhsDriveAccess:
 
         return response
 
-    def read_file_info(self, p_numitems:int=25):
+    def read_file_info(self, p_mimetype:str = "text/plain", p_numitems:int = 25):
         """READ file data from my Google drive."""
         self._lgr.debug( get_current_time() )
         if not self.fserv:
             self._lgr.exception("No Session started!")
             return
         try:
-            results = self.fserv.list( pageSize = p_numitems,
-                                       fields = "nextPageToken, files(id, name, parents, mimeType)").execute()
+            results = self.fserv.list( q = F"mimeType='{p_mimetype}'",
+                                       spaces = "drive",
+                                       pageSize = p_numitems,
+                                       fields = "files(name, id, parents, mimeType)").execute()
             items = results.get("files", [])
             if not items:
                 self._lgr.error("No files found?!")
             else:
                 self._lgr.info("Files:")
                 for item in items:
-                    self._lgr.info(F"{item['name']} ({item['id']})")
+                    self._lgr.info(F"{item['name']} <{item['mimeType']}> ({item['id']}) {item['parents']}")
             self._lgr.info(F"{len(items)} files retrieved.\n")
         except Exception as rde:
             self._lgr.error(repr(rde))
@@ -166,8 +168,8 @@ if __name__ == "__main__":
                 mhs.find_all_folders()
             else:
                 num_files = int(test_parameter)
-                print(F"test read {num_files} files:")
-                mhs.read_file_info(num_files)
+                print(F"test read {test_parameter} files:")
+                mhs.read_file_info(p_numitems = num_files)
         except Exception as me:
             print(repr(me))
         finally:

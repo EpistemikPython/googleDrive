@@ -11,7 +11,7 @@ __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __google_api_python_client_py3_version__ = "1.2"
 __created__ = "2021-05-14"
-__updated__ = "2021-05-16"
+__updated__ = "2021-05-17"
 
 import sys
 import threading
@@ -60,18 +60,13 @@ class MhsDriveAccess:
     """Start a locked session, read/write to my google drive, end the session."""
     def __init__(self, p_logger:lg.Logger=None):
         self._lgr = p_logger if p_logger else get_simple_logger(self.__class__.__name__, level = "INFO")
-        # TODO: need this?
-        self._data = list()
         # prevent different instances/threads from writing at the same time
         self._lock = threading.Lock()
         self._lgr.info(F"Launch {self.__class__.__name__} instance with lock = {str(self._lock)} at {get_current_time()}")
 
-    def get_data(self) -> list:
-        return self._data
-
     # noinspection PyAttributeOutsideInit
     def begin_session(self):
-        # ACTIVATE a UNIQUE session to the drive
+        """ACTIVATE a UNIQUE session to the drive."""
         self._lock.acquire()
         self._lgr.info(F"acquired Drive lock at {get_current_time()}")
         creds = get_credentials()
@@ -79,17 +74,9 @@ class MhsDriveAccess:
         self.fserv = service.files()
 
     def end_session(self):
-        # RELEASE this drive session
+        """RELEASE this drive session."""
         self._lock.release()
         self._lgr.debug(F"released Drive lock at {get_current_time()}")
-
-    # TODO: need this?
-    def __get_file_id(self, fn:str) -> str:
-        """Get the file id string from the file in the secrets folder."""
-        with open(fn, "r") as gfp:
-            fid = gfp.readline().strip()
-        self._lgr.debug(F"{get_current_time()} / File Id = {fid}\n")
-        return fid
 
     def send_file(self, filepath:str, p_parent:str=None) -> str:
         """SEND a file to my Google drive
@@ -116,14 +103,14 @@ class MhsDriveAccess:
         return response
 
     def read_file_info(self, p_numitems:int=25):
-        """READ data from my Google drive."""
+        """READ file data from my Google drive."""
         self._lgr.debug( get_current_time() )
         if not self.fserv:
             self._lgr.exception("No Session started!")
             return
         try:
-            results = self.fserv.list(pageSize = p_numitems,
-                                      fields = "nextPageToken, files(id, name)").execute()
+            results = self.fserv.list( pageSize = p_numitems,
+                                       fields = "nextPageToken, files(id, name, parents, mimeType)").execute()
             items = results.get("files", [])
             if not items:
                 self._lgr.error("No files found?!")
@@ -148,7 +135,7 @@ class MhsDriveAccess:
                                             spaces = "drive",
                                             fields = "nextPageToken, files(id, name, parents)",
                                             pageToken = page_token ).execute()
-                for item in response.get('files', []):
+                for item in response.get("files", []):
                     self._lgr.info(F" {item.get('name')} ({item.get('id')}) {item.get('parents')}")
                 page_token = response.get("nextPageToken", None)
                 if page_token is None:
@@ -156,56 +143,7 @@ class MhsDriveAccess:
         except Exception as ffe:
             self._lgr.error(repr(ffe))
 
-    def test_send(self, file_name:str) -> str:
-        self.begin_session()
-        result = self.send_file(file_name)
-        self._lgr.info(result)
-        self.end_session()
-        return result
-
 # END class MhsDriveAccess
-
-
-def test_metadata_read(p_numfiles:str):
-    """Shows basic usage of the Drive v3 API.
-    Prints the names and ids of the first 'num_files' files the user can access
-    """
-    creds = get_credentials()
-    service = build("drive", "v3", credentials=creds)
-
-    # call the Drive v3 API
-    results = service.files().list(pageSize = int(p_numfiles),
-                                   fields = "nextPageToken, files(id, name)").execute()
-    items = results.get("files", [])
-
-    if not items:
-        print("No files found?!")
-    else:
-        print("Files:")
-        for item in items:
-            print(F"{item['name']} ({item['id']})")
-
-
-def test_file_send(filepath:str):
-    creds = get_credentials()
-    service = build("drive", "v3", credentials=creds)
-
-    parent_folder = FOLDER_IDS["FIN"]
-    file_metadata = {"name":get_base_filename(filepath), "parents":[parent_folder]}
-    media = MediaFileUpload(filepath, mimetype = "text/plain", resumable = True)
-    print(F"Send to FIN ({parent_folder})")
-
-    file = service.files().create( body = file_metadata,
-                                   # uploadType = multipart,
-                                   media_body = media,
-                                   fields = "id" ).execute()
-    print(F"File ID: {file.get('id')}")
-
-
-def mhs_class_test(p_filepath:str):
-    mhst = MhsDriveAccess()
-    response = mhst.test_send(p_filepath)
-    print( repr(response) )
 
 
 if __name__ == "__main__":
@@ -221,9 +159,8 @@ if __name__ == "__main__":
                     parent = sys.argv[2]
                     if parent in FOLDER_IDS.keys():
                         parent_id = FOLDER_IDS[parent]
-                print(F"test file upload with: {parent if parent else 'root'}/{test_parameter}")
+                print(F"test upload with file: {test_parameter} to Drive:{parent if parent else 'root'}")
                 mhs.send_file(test_parameter, parent_id)
-                # test_file_send(test_parameter)
             elif test_parameter == "folders":
                 print("test finding folders:")
                 mhs.find_all_folders()
@@ -231,7 +168,6 @@ if __name__ == "__main__":
                 num_files = int(test_parameter)
                 print(F"test read {num_files} files:")
                 mhs.read_file_info(num_files)
-                # test_metadata_read(test_parameter)
         except Exception as me:
             print(repr(me))
         finally:

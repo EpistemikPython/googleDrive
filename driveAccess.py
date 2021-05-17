@@ -91,7 +91,7 @@ class MhsDriveAccess:
         self._lgr.debug(F"{get_current_time()} / File Id = {fid}\n")
         return fid
 
-    def send_file(self, filepath:str, parent:str=None) -> str:
+    def send_file(self, filepath:str, p_parent:str=None) -> str:
         """SEND a file to my Google drive
         :return server response
         """
@@ -101,10 +101,10 @@ class MhsDriveAccess:
             return ""
         try:
             file_metadata = {"name":get_base_filename(filepath)}
-            if parent:
-                file_metadata["parents"] = [parent]
+            if p_parent:
+                file_metadata["parents"] = [p_parent]
             media = MediaFileUpload(filepath, mimetype = "text/plain", resumable = True)
-            self._lgr.info(F"Send file '{filepath}' to Drive folder: {parent if parent else 'root'}")
+            self._lgr.info(F"Send file '{filepath}' to Drive folder: {p_parent if p_parent else 'root'}")
 
             file = self.fserv.create(body = file_metadata, media_body = media, fields = "id").execute()
             response = file.get("id")
@@ -115,15 +115,15 @@ class MhsDriveAccess:
 
         return response
 
-    def read_file_info(self, num_items:int):
+    def read_file_info(self, p_numitems:int=25):
         """READ data from my Google drive."""
         self._lgr.debug( get_current_time() )
         if not self.fserv:
             self._lgr.exception("No Session started!")
             return
         try:
-            results = self.fserv.list( pageSize = num_items,
-                                       fields = "nextPageToken, files(id, name)" ).execute()
+            results = self.fserv.list(pageSize = p_numitems,
+                                      fields = "nextPageToken, files(id, name)").execute()
             items = results.get("files", [])
             if not items:
                 self._lgr.error("No files found?!")
@@ -135,7 +135,7 @@ class MhsDriveAccess:
         except Exception as rde:
             self._lgr.error(repr(rde))
 
-    def find_folders(self):
+    def find_all_folders(self):
         """Find all the folders on my drive."""
         self._lgr.debug( get_current_time() )
         if not self.fserv:
@@ -166,7 +166,7 @@ class MhsDriveAccess:
 # END class MhsDriveAccess
 
 
-def test_metadata_read(num_files:str):
+def test_metadata_read(p_numfiles:str):
     """Shows basic usage of the Drive v3 API.
     Prints the names and ids of the first 'num_files' files the user can access
     """
@@ -174,8 +174,8 @@ def test_metadata_read(num_files:str):
     service = build("drive", "v3", credentials=creds)
 
     # call the Drive v3 API
-    results = service.files().list( pageSize = int(num_files),
-                                    fields = "nextPageToken, files(id, name)" ).execute()
+    results = service.files().list(pageSize = int(p_numfiles),
+                                   fields = "nextPageToken, files(id, name)").execute()
     items = results.get("files", [])
 
     if not items:
@@ -209,20 +209,32 @@ def mhs_class_test(p_filepath:str):
 
 
 if __name__ == "__main__":
+    mhs = None
     if len(sys.argv) > 1:
-        test_parameter = sys.argv[1]
-    else:
-        test_parameter = "25"
-    if osp.exists(test_parameter):
-        print(F"test file upload with '{test_parameter}'")
-        test_file_send(test_parameter)
-    elif test_parameter == "folders":
-        print("test finding folders:")
-        mhs = MhsDriveAccess()
-        mhs.begin_session()
-        mhs.find_folders()
-        mhs.end_session()
-    else:
-        print("test metadata read:")
-        test_metadata_read(test_parameter)
+        try:
+            test_parameter = sys.argv[1]
+            mhs = MhsDriveAccess()
+            mhs.begin_session()
+            if osp.exists(test_parameter):
+                parent = parent_id = None
+                if len(sys.argv) > 2:
+                    parent = sys.argv[2]
+                    if parent in FOLDER_IDS.keys():
+                        parent_id = FOLDER_IDS[parent]
+                print(F"test file upload with: {parent if parent else 'root'}/{test_parameter}")
+                mhs.send_file(test_parameter, parent_id)
+                # test_file_send(test_parameter)
+            elif test_parameter == "folders":
+                print("test finding folders:")
+                mhs.find_all_folders()
+            else:
+                num_files = int(test_parameter)
+                print(F"test read {num_files} files:")
+                mhs.read_file_info(num_files)
+                # test_metadata_read(test_parameter)
+        except Exception as me:
+            print(repr(me))
+        finally:
+            if mhs:
+                mhs.end_session()
     exit()

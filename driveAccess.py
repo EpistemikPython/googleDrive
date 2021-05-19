@@ -45,7 +45,7 @@ def get_credentials():
     # if there are no (valid) credentials available, let the user log in
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            creds.refresh( Request() )
         else:
             flow = InstalledAppFlow.from_client_secrets_file( CREDENTIALS_FILE, DRIVE_ACCESS_SCOPE )
             creds = flow.run_local_server(port=0)
@@ -112,7 +112,7 @@ class MhsDriveAccess:
             results = self.fserv.list( q = F"mimeType='{p_mimetype}'",
                                        spaces = "drive",
                                        pageSize = p_numitems,
-                                       fields = "files(name, id, parents, mimeType)").execute()
+                                       fields = "files(name, id, parents, mimeType)" ).execute()
             items = results.get("files", [])
             if not items:
                 self._lgr.error("No files found?!")
@@ -156,22 +156,23 @@ if __name__ == "__main__":
             mhs = MhsDriveAccess()
             mhs.begin_session()
             if osp.exists(test_parameter):
+                # test file send
                 parent = parent_id = None
                 if len(sys.argv) > 2:
                     parent = sys.argv[2]
                     if parent in FOLDER_IDS.keys():
                         parent_id = FOLDER_IDS[parent]
-                print(F"test upload with file: {test_parameter} to Drive:{parent if parent else 'root'}")
+                print(F"test upload with file: {test_parameter} to Drive:/{parent if parent else 'root'}")
                 mhs.send_file(test_parameter, parent_id)
             elif test_parameter == "folders":
                 print("test finding folders:")
                 mhs.find_all_folders()
             else:
+                print(F"test reading info from {test_parameter} files:")
                 num_files = int(test_parameter)
-                print(F"test read {test_parameter} files:")
                 mhs.read_file_info(p_numitems = num_files)
         except Exception as me:
-            print(repr(me))
+            print( repr(me) )
         finally:
             if mhs:
                 mhs.end_session()

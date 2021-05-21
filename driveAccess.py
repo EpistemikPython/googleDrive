@@ -34,8 +34,12 @@ CREDENTIALS_FILE:str    = osp.join(SECRETS_DIR, "credentials.json")
 DRIVE_TOKEN_PATH:str    = osp.join(SECRETS_DIR, "token.json")
 DRIVE_ACCESS_SCOPE:list = ["https://www.googleapis.com/auth/drive"]
 
-MIMETYPE_TEXT = "text/plain"
+MIMETYPE_TEXT          = "text/plain"
 MIMETYPE_GOOGLE_FOLDER = "application/vnd.google-apps.folder"
+MIMETYPE_GNUCASH       = "application/x-gnucash"
+MIMETYPE_GNC_METAFILE  = "application/octet-stream"
+MIMETYPE_GOOGLE_DOC    = "application/vnd.google-apps.document"
+MIMETYPE_GOOGLE_SHEET  = "application/vnd.google-apps.spreadsheet"
 
 def get_credentials():
     """Get the proper credentials needed to access my Google drive."""
@@ -170,9 +174,13 @@ if __name__ == "__main__":
                 print("test finding folders:")
                 mhs.find_all_folders()
             else:
-                print(F"test reading info from {test_parameter} files:")
+                # test reading file info for a particular mimetype
+                mtype = MIMETYPE_TEXT
                 num_files = int(test_parameter)
-                mhs.read_file_info(p_numitems = num_files)
+                if len(sys.argv) > 2:
+                    mtype = sys.argv[2]
+                print(F"test reading info from {test_parameter} {mtype} files:")
+                mhs.read_file_info(p_mimetype = mtype, p_numitems = num_files)
         except Exception as me:
             print( repr(me) )
         finally:

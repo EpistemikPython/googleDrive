@@ -11,7 +11,7 @@ __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __google_api_python_client_py3_version__ = "1.2"
 __created__ = "2021-05-14"
-__updated__ = "2021-05-17"
+__updated__ = "2021-05-21"
 
 import sys
 import threading
@@ -22,26 +22,28 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 sys.path.append("/newdata/dev/git/Python/utils")
 from mhsLogging import get_simple_logger
-from mhsUtils import get_base_filename, get_current_time, osp, lg
+from mhsUtils import get_base_filename, get_current_time, osp, lg, BASE_PYTHON_FOLDER
 from folder_ids import FOLDER_IDS
 
 # see https://github.com/googleapis/google-api-python-client/issues/299
 # use: e.g. build("drive", "v3", http=http, cache_discovery=False)
 lg.getLogger("googleapiclient.discovery_cache").setLevel(lg.ERROR)
 
-SECRETS_DIR = "/newdata/dev/git/Python/Google/Drive/secrets"
-CREDENTIALS_FILE:str = osp.join(SECRETS_DIR, "credentials" + osp.extsep + "json")
-DRIVE_ACCESS_SCOPE:list  = ["https://www.googleapis.com/auth/drive"]
-DRIVE_JSON_TOKEN:str     = "token.json"
-DRIVE_TOKEN_LOCATION:str = osp.join(SECRETS_DIR, DRIVE_JSON_TOKEN)
+SECRETS_DIR:str         = F"{BASE_PYTHON_FOLDER}/Google/Drive/secrets"
+CREDENTIALS_FILE:str    = osp.join(SECRETS_DIR, "credentials.json")
+DRIVE_TOKEN_PATH:str    = osp.join(SECRETS_DIR, "token.json")
+DRIVE_ACCESS_SCOPE:list = ["https://www.googleapis.com/auth/drive"]
+
+MIMETYPE_TEXT = "text/plain"
+MIMETYPE_GOOGLE_FOLDER = "application/vnd.google-apps.folder"
 
 def get_credentials():
     """Get the proper credentials needed to access my Google drive."""
     creds = None
     # The TOKEN file stores the user's access and refresh tokens & is
     # created automatically when the authorization flow completes for the first time
-    if osp.exists(DRIVE_TOKEN_LOCATION):
-        creds = Credentials.from_authorized_user_file( DRIVE_TOKEN_LOCATION, DRIVE_ACCESS_SCOPE )
+    if osp.exists( DRIVE_TOKEN_PATH ):
+        creds = Credentials.from_authorized_user_file( DRIVE_TOKEN_PATH, DRIVE_ACCESS_SCOPE )
     # if there are no (valid) credentials available, let the user log in
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
@@ -62,7 +64,7 @@ class MhsDriveAccess:
         self._lgr = p_logger if p_logger else get_simple_logger(self.__class__.__name__, level = "INFO")
         # prevent different instances/threads from writing at the same time
         self._lock = threading.Lock()
-        self._lgr.info(F"Launch {self.__class__.__name__} instance with lock = {str(self._lock)} at {get_current_time()}")
+        self._lgr.info(F"Launch {self.__class__.__name__} instance with lock = {self._lock.__str__()} at {get_current_time()}")
 
     # noinspection PyAttributeOutsideInit
     def begin_session(self):
@@ -90,8 +92,8 @@ class MhsDriveAccess:
             file_metadata = {"name":get_base_filename(filepath)}
             if p_parent:
                 file_metadata["parents"] = [p_parent]
-            media = MediaFileUpload(filepath, mimetype = "text/plain", resumable = True)
-            self._lgr.info(F"Send file '{filepath}' to Drive folder: {p_parent if p_parent else 'root'}")
+            media = MediaFileUpload(filepath, mimetype = MIMETYPE_TEXT, resumable = True)
+            self._lgr.info(F"Send file '{filepath}' to Drive:/{p_parent if p_parent else 'root'}")
 
             file = self.fserv.create(body = file_metadata, media_body = media, fields = "id").execute()
             response = file.get("id")
@@ -102,7 +104,7 @@ class MhsDriveAccess:
 
         return response
 
-    def read_file_info(self, p_mimetype:str = "text/plain", p_numitems:int = 25):
+    def read_file_info(self, p_mimetype:str = MIMETYPE_TEXT, p_numitems:int = 25):
         """READ file data from my Google drive."""
         self._lgr.debug( get_current_time() )
         if not self.fserv:
@@ -133,7 +135,7 @@ class MhsDriveAccess:
         try:
             page_token = None
             while True:
-                response = self.fserv.list( q = "mimeType='application/vnd.google-apps.folder'",
+                response = self.fserv.list( q = F"mimeType='{MIMETYPE_GOOGLE_FOLDER}'",
                                             spaces = "drive",
                                             fields = "nextPageToken, files(id, name, parents)",
                                             pageToken = page_token ).execute()
@@ -149,8 +151,8 @@ class MhsDriveAccess:
 
 
 if __name__ == "__main__":
-    mhs = None
     if len(sys.argv) > 1:
+        mhs = None
         try:
             test_parameter = sys.argv[1]
             mhs = MhsDriveAccess()
@@ -162,7 +164,7 @@ if __name__ == "__main__":
                     parent = sys.argv[2]
                     if parent in FOLDER_IDS.keys():
                         parent_id = FOLDER_IDS[parent]
-                print(F"test upload with file: {test_parameter} to Drive:/{parent if parent else 'root'}")
+                print(F"test upload of file: {test_parameter} to Drive folder: {parent if parent else 'root'}")
                 mhs.send_file(test_parameter, parent_id)
             elif test_parameter == "folders":
                 print("test finding folders:")

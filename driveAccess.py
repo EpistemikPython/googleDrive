@@ -13,6 +13,7 @@ __google_api_python_client_py3_version__ = "1.2"
 __created__ = "2021-05-14"
 __updated__ = "2021-07-06"
 
+import glob
 import os
 import shutil
 import sys
@@ -42,9 +43,9 @@ DRIVE_ACCESS_SCOPE:list = ["https://www.googleapis.com/auth/drive"]
 
 DEFAULT_NUM_FILES = 25
 MIMETYPE_TEXT          = "text/plain"
-MIMETYPE_GOOGLE_FOLDER = "application/vnd.google-apps.folder"
 MIMETYPE_GNUCASH       = "application/x-gnucash"
-MIMETYPE_GNC_METAFILE  = "application/octet-stream"
+MIMETYPE_GNC_METAFILE  = "application/octet-stream" # xxx.gcm
+MIMETYPE_GOOGLE_FOLDER = "application/vnd.google-apps.folder"
 MIMETYPE_GOOGLE_DOC    = "application/vnd.google-apps.document"
 MIMETYPE_GOOGLE_SHEET  = "application/vnd.google-apps.spreadsheet"
 
@@ -94,6 +95,20 @@ class MhsDriveAccess:
         self._lock.release()
         self._lgr.debug(F"released Drive lock at {get_current_time()}")
 
+    def send_folder(self, fpath:str, parent_id:str):
+        """SEND the files in a folder to my Google drive."""
+        self._lgr.debug( get_current_time() )
+        if not self.fserv:
+            self._lgr.exception("No Session started!")
+            return
+        try:
+            fgs = glob.glob(fpath + os.sep + '*')
+            for item in fgs:
+                if osp.isfile(item):
+                    self.send_file(item, parent_id)
+        except Exception as sfe:
+            self._lgr.error( repr(sfe) )
+
     def send_file(self, filepath:str, parent_id:str) -> str:
         """SEND a file to my Google drive
         :return server response
@@ -101,7 +116,7 @@ class MhsDriveAccess:
         self._lgr.debug( get_current_time() )
         if not self.fserv:
             self._lgr.exception("No Session started!")
-            return ""
+            return ''
         try:
             file_metadata = {"name":get_filename(filepath), "parents":[parent_id]}
             media = MediaFileUpload(filepath, mimetype = MIMETYPE_TEXT, resumable = True)
@@ -169,7 +184,7 @@ def process_args():
                                 prog="driveAccess.py")
     # optional arguments
     arg_parser.add_argument('--folders',  action = "store_true", help = "Get information on all my Google drive folders")
-    arg_parser.add_argument('-s', '--send', help = "path & name of the file to send")
+    arg_parser.add_argument('-s', '--send', help = "path & name of the file/folder to send")
     arg_parser.add_argument('-p', '--parent', default = "root", help = "name of the Drive parent folder to send to")
     arg_parser.add_argument('-m', '--mimetype', default = MIMETYPE_TEXT, help = "mimetype of files to gather info on")
     arg_parser.add_argument('-n', '--numfiles', type = int, default = DEFAULT_NUM_FILES,
@@ -181,9 +196,9 @@ def process_input_parameters(argx:list):
     args = process_args().parse_args(argx)
     info = [F"args = {args}"]
 
-    if args.send and not osp.isfile(args.send):
+    if args.send and not osp.isdir(args.send) and not osp.isfile(args.send):
         raise Exception(F"File path '{args.send}' does not exist! Exiting...")
-    info.append(F"Send file = {args.send}")
+    info.append(F"Send item = {args.send}")
 
     parent = args.parent
     if parent not in FOLDER_IDS.keys():
@@ -194,7 +209,7 @@ def process_input_parameters(argx:list):
 
 
 def main_drive(argl:list):
-    folders, sendfile, parent, parent_id, mimetype, numfiles = process_input_parameters(argl)
+    folders, senditem, parent, parent_id, mimetype, numfiles = process_input_parameters(argl)
 
     log_control = MhsLogger(base_run_file, con_level = DEFAULT_LOG_LEVEL)
     log_control.show(F"Runtime = {get_current_time()}")
@@ -208,9 +223,13 @@ def main_drive(argl:list):
             print("test finding folders:")
             mhs.find_all_folders()
 
-        elif sendfile and parent_id:
-            print(F"test upload of file: {sendfile} to Drive folder: {parent if parent else 'root'}")
-            mhs.send_file(sendfile, parent_id)
+        elif senditem and parent_id:
+            if osp.isdir( senditem ):
+                print(F"test upload of files in folder '{senditem}' to Drive folder: {parent if parent else 'root'}")
+                mhs.send_folder(senditem, parent_id)
+            else:
+                print(F"test upload of file: {senditem} to Drive folder: {parent if parent else 'root'}")
+                mhs.send_file(senditem, parent_id)
 
         elif mimetype and numfiles:
             print(F"test reading info from {numfiles} {mimetype} files:")

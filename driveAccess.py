@@ -11,8 +11,10 @@ __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __google_api_python_client_py3_version__ = "1.2"
 __created__ = "2021-05-14"
-__updated__ = "2021-05-21"
+__updated__ = "2021-07-05"
 
+import os
+import shutil
 import sys
 import threading
 from google.auth.transport.requests import Request
@@ -22,16 +24,18 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 sys.path.append("/newdata/dev/git/Python/utils")
 from mhsLogging import get_simple_logger
-from mhsUtils import get_base_filename, get_current_time, osp, lg, BASE_PYTHON_FOLDER
+from mhsUtils import get_base_filename, get_current_time, osp, lg, file_ts, BASE_PYTHON_FOLDER
+SECRETS_DIR:str = F"{BASE_PYTHON_FOLDER}/Google/Drive/secrets"
+sys.path.append(SECRETS_DIR)
 from folder_ids import FOLDER_IDS
 
 # see https://github.com/googleapis/google-api-python-client/issues/299
 # use: e.g. build("drive", "v3", http=http, cache_discovery=False)
 lg.getLogger("googleapiclient.discovery_cache").setLevel(lg.ERROR)
 
-SECRETS_DIR:str         = F"{BASE_PYTHON_FOLDER}/Google/Drive/secrets"
+JSON_TOKEN = "token.json"
 CREDENTIALS_FILE:str    = osp.join(SECRETS_DIR, "credentials.json")
-DRIVE_TOKEN_PATH:str    = osp.join(SECRETS_DIR, "token.json")
+DRIVE_TOKEN_PATH:str    = osp.join(SECRETS_DIR, JSON_TOKEN)
 DRIVE_ACCESS_SCOPE:list = ["https://www.googleapis.com/auth/drive"]
 
 MIMETYPE_TEXT          = "text/plain"
@@ -56,8 +60,11 @@ def get_credentials():
             flow = InstalledAppFlow.from_client_secrets_file( CREDENTIALS_FILE, DRIVE_ACCESS_SCOPE )
             creds = flow.run_local_server(port=0)
         # save the credentials for the next run
-        with open("token.json", 'w') as token:
+        with open(JSON_TOKEN, 'w') as token:
             token.write( creds.to_json() )
+        if osp.exists(DRIVE_TOKEN_PATH):
+            os.rename(DRIVE_TOKEN_PATH, DRIVE_TOKEN_PATH + osp.extsep + file_ts)
+        shutil.move(JSON_TOKEN, SECRETS_DIR)
 
     return creds
 
@@ -186,4 +193,6 @@ if __name__ == "__main__":
         finally:
             if mhs:
                 mhs.end_session()
+    else:
+        print("NO parameters.")
     exit()

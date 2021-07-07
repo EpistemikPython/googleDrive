@@ -83,7 +83,7 @@ class MhsDriveAccess:
 
     # noinspection PyAttributeOutsideInit
     def begin_session(self):
-        """ACTIVATE a UNIQUE session to the drive."""
+        """Activate a UNIQUE session to the drive."""
         self._lock.acquire()
         self._lgr.info(F"acquired Drive lock at {get_current_time()}")
         creds = get_credentials()
@@ -95,14 +95,14 @@ class MhsDriveAccess:
         self._lock.release()
         self._lgr.debug(F"released Drive lock at {get_current_time()}")
 
-    def send_folder(self, fpath:str, parent_id:str):
+    def send_folder(self, fpath:str, parent_id:str, wildcard:str = '*'):
         """SEND the files in a folder to my Google drive."""
         self._lgr.debug( get_current_time() )
         if not self.fserv:
             self._lgr.exception("No Session started!")
             return
         try:
-            fgs = glob.glob(fpath + os.sep + '*')
+            fgs = glob.glob(fpath + os.sep + wildcard)
             for item in fgs:
                 if osp.isfile(item):
                     self.send_file(item, parent_id)
@@ -154,7 +154,7 @@ class MhsDriveAccess:
             self._lgr.error(repr(rde))
 
     def find_all_folders(self):
-        """Find all the folders on my drive."""
+        """FIND all the folders on my drive."""
         self._lgr.debug( get_current_time() )
         if not self.fserv:
             self._lgr.exception("No Session started!")

@@ -11,7 +11,7 @@ __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __google_api_python_client_py3_version__ = "1.2"
 __created__ = "2021-05-14"
-__updated__ = "2021-07-06"
+__updated__ = "2021-07-07"
 
 import glob
 import os
@@ -26,7 +26,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 sys.path.append("/newdata/dev/git/Python/utils")
 from mhsLogging import get_simple_logger, MhsLogger, DEFAULT_LOG_LEVEL
-from mhsUtils import get_base_filename, get_filename, get_current_time, osp, lg, file_ts, BASE_PYTHON_FOLDER
+from mhsUtils import *
 SECRETS_DIR:str = F"{BASE_PYTHON_FOLDER}/Google/Drive/secrets"
 sys.path.append(SECRETS_DIR)
 from folder_ids import FOLDER_IDS
@@ -41,13 +41,18 @@ CREDENTIALS_FILE:str    = osp.join(SECRETS_DIR, "credentials.json")
 DRIVE_TOKEN_PATH:str    = osp.join(SECRETS_DIR, JSON_TOKEN)
 DRIVE_ACCESS_SCOPE:list = ["https://www.googleapis.com/auth/drive"]
 
-DEFAULT_NUM_FILES = 25
-MIMETYPE_TEXT          = "text/plain"
-MIMETYPE_GNUCASH       = "application/x-gnucash"
-MIMETYPE_GNC_METAFILE  = "application/octet-stream" # xxx.gcm
-MIMETYPE_GOOGLE_FOLDER = "application/vnd.google-apps.folder"
-MIMETYPE_GOOGLE_DOC    = "application/vnd.google-apps.document"
-MIMETYPE_GOOGLE_SHEET  = "application/vnd.google-apps.spreadsheet"
+DEFAULT_NUM_FILES = 32
+MAX_NUM_FILES     = 256
+FILE_MIME_TYPE = {
+    "txt"     : "text/plain",
+    "info"    : "text/plain",
+    "gnc"     : "application/x-gnucash",
+    "gnucash" : "application/x-gnucash",
+    "gcm"     : "application/octet-stream", # gnucash metafile
+    "gfldr"   : "application/vnd.google-apps.folder",
+    "gdoc"    : "application/vnd.google-apps.document",
+    "gsht"    : "application/vnd.google-apps.spreadsheet"
+}
 
 def get_credentials():
     """Get the proper credentials needed to access my Google drive."""
@@ -118,8 +123,13 @@ class MhsDriveAccess:
             self._lgr.exception("No Session started!")
             return ''
         try:
+            mime_type = FILE_MIME_TYPE["txt"]
+            f_type = get_filetype(filepath)
+            if f_type and f_type in FILE_MIME_TYPE.keys():
+                mime_type = FILE_MIME_TYPE[f_type]
+
             file_metadata = {"name":get_filename(filepath), "parents":[parent_id]}
-            media = MediaFileUpload(filepath, mimetype = MIMETYPE_TEXT, resumable = True)
+            media = MediaFileUpload(filepath, mimetype = mime_type, resumable = True)
             self._lgr.info(F"Send file '{filepath}' to Drive://{parent_id}/")
 
             file = self.fserv.create(body = file_metadata, media_body = media, fields = "id").execute()
@@ -131,7 +141,7 @@ class MhsDriveAccess:
 
         return response
 
-    def read_file_info(self, p_mimetype:str = MIMETYPE_TEXT, p_numitems:int = DEFAULT_NUM_FILES):
+    def read_file_info(self, p_mimetype:str = FILE_MIME_TYPE["txt"], p_numitems:int = DEFAULT_NUM_FILES):
         """READ file data from my Google drive."""
         self._lgr.debug( get_current_time() )
         if not self.fserv:
@@ -163,8 +173,9 @@ class MhsDriveAccess:
             page_token = None
             self._lgr.info("Folders:")
             self._lgr.info(" Name\t\t(Id)\t\t\t[parent id]")
+            mime_type = FILE_MIME_TYPE["gfldr"]
             while True:
-                response = self.fserv.list( q = F"mimeType='{MIMETYPE_GOOGLE_FOLDER}'",
+                response = self.fserv.list( q = F"mimeType='{mime_type}'",
                                             spaces = "drive",
                                             fields = "nextPageToken, files(id, name, parents)",
                                             pageToken = page_token ).execute()
@@ -183,29 +194,31 @@ def process_args():
     arg_parser = ArgumentParser(description="Send to or request information from my Google Drive",
                                 prog="driveAccess.py")
     # optional arguments
-    arg_parser.add_argument('--folders',  action = "store_true", help = "Get information on all my Google drive folders")
-    arg_parser.add_argument('-s', '--send', help = "path & name of the file/folder to send")
-    arg_parser.add_argument('-p', '--parent', default = "root", help = "name of the Drive parent folder to send to")
-    arg_parser.add_argument('-m', '--mimetype', default = MIMETYPE_TEXT, help = "mimetype of files to gather info on")
-    arg_parser.add_argument('-n', '--numfiles', type = int, default = DEFAULT_NUM_FILES,
-                            help = "number of files to gather info on")
+    arg_parser.add_argument("--folders", action = "store_true", help = "Get information on all my Google drive FOLDERS")
+    arg_parser.add_argument("-s", "--send", help = "path/name of a file|folder to send")
+    arg_parser.add_argument("-p", "--parent", default = "root", help = "name of the Drive parent folder to send to")
+    arg_parser.add_argument("-t", "--type", default = "txt",
+                            help = F"type of files to gather info on:\n\t{repr(FILE_MIME_TYPE)}")
+    arg_parser.add_argument("-n", "--numfiles", type = int, default = DEFAULT_NUM_FILES,
+                            help = F"number of files to gather info on (max = {MAX_NUM_FILES})")
     return arg_parser
 
 
 def process_input_parameters(argx:list):
     args = process_args().parse_args(argx)
-    info = [F"args = {args}"]
 
     if args.send and not osp.isdir(args.send) and not osp.isfile(args.send):
         raise Exception(F"File path '{args.send}' does not exist! Exiting...")
-    info.append(F"Send item = {args.send}")
 
-    parent = args.parent
-    if parent not in FOLDER_IDS.keys():
-        raise Exception(F"Parent folder '{parent}' does not exist! Exiting...")
-    parent_id = FOLDER_IDS[parent]
+    if args.parent not in FOLDER_IDS.keys():
+        raise Exception(F"Parent folder '{args.parent}' does not exist! Exiting...")
+    parent_id = FOLDER_IDS[args.parent]
 
-    return args.folders, args.send, parent, parent_id, args.mimetype, args.numfiles
+    if args.type not in FILE_MIME_TYPE.keys():
+        raise Exception(F"file type '{args.type}' does not exist! Exiting...")
+    mime_type = FILE_MIME_TYPE[args.type]
+
+    return args.folders, args.send, args.parent, parent_id, mime_type, args.numfiles
 
 
 def main_drive(argl:list):
@@ -223,7 +236,7 @@ def main_drive(argl:list):
             print("test finding folders:")
             mhs.find_all_folders()
 
-        elif senditem and parent_id:
+        elif senditem:
             if osp.isdir( senditem ):
                 print(F"test upload of files in folder '{senditem}' to Drive folder: {parent if parent else 'root'}")
                 mhs.send_folder(senditem, parent_id)
@@ -231,15 +244,15 @@ def main_drive(argl:list):
                 print(F"test upload of file: {senditem} to Drive folder: {parent if parent else 'root'}")
                 mhs.send_file(senditem, parent_id)
 
-        elif mimetype and numfiles:
+        elif MAX_NUM_FILES >= numfiles > 0:
             print(F"test reading info from {numfiles} {mimetype} files:")
-            mhs.read_file_info(p_mimetype = mimetype, p_numitems = numfiles)
+            mhs.read_file_info(mimetype, numfiles)
 
         else:
-            print("NO parameters.")
+            print("do NOTHING...")
 
-    except Exception as de:
-        print( repr(de) )
+    except Exception as mex:
+        print( repr(mex) )
     finally:
         if mhs:
             mhs.end_session()

@@ -3,6 +3,7 @@
 /gnucash
 /old
 /info
+/send
 folder_ids.py
 /secrets
 credentials*

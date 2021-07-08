@@ -11,7 +11,7 @@ __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __google_api_python_client_py3_version__ = "1.2"
 __created__ = "2021-05-14"
-__updated__ = "2021-07-07"
+__updated__ = "2021-07-08"
 
 import glob
 import os
@@ -85,8 +85,8 @@ class MhsDriveAccess:
         # prevent different instances/threads from writing at the same time
         self._lock = threading.Lock()
         self._lgr.info(F"Launch {self.__class__.__name__} instance with lock = {self._lock.__str__()} at {get_current_time()}")
+        self.fserv = None
 
-    # noinspection PyAttributeOutsideInit
     def begin_session(self):
         """Activate a UNIQUE session to the drive."""
         self._lock.acquire()
@@ -107,12 +107,12 @@ class MhsDriveAccess:
             self._lgr.exception("No Session started!")
             return
         try:
-            fgs = glob.glob(fpath + os.sep + wildcard)
-            for item in fgs:
+            fgw = glob.glob(fpath + os.sep + wildcard)
+            for item in fgw:
                 if osp.isfile(item):
                     self.send_file(item, parent_id)
-        except Exception as sfe:
-            self._lgr.error( repr(sfe) )
+        except Exception as sfdex:
+            self._lgr.error( repr(sfdex) )
 
     def send_file(self, filepath:str, parent_id:str) -> str:
         """SEND a file to my Google drive
@@ -135,8 +135,8 @@ class MhsDriveAccess:
             file = self.fserv.create(body = file_metadata, media_body = media, fields = "id").execute()
             response = file.get("id")
             self._lgr.info(F"Sent file: Id = {response}")
-        except Exception as sfe:
-            response = repr(sfe)
+        except Exception as sfex:
+            response = repr(sfex)
             self._lgr.error(response)
 
         return response
@@ -156,12 +156,14 @@ class MhsDriveAccess:
             if not items:
                 self._lgr.error("No files found?!")
             else:
-                self._lgr.info(F"{len(items)} files retrieved:")
-                self._lgr.info(" Name\t\t<type>\t\t(Id)\t\t\t[parent id]")
+                self._lgr.info(F"{len(items)} {p_mimetype} files retrieved:")
+                self._lgr.info(" Name\t\t\t<type>\t\t\t(Id)\t\t\t[parent id]")
                 for item in items:
-                    self._lgr.info(F"{item['name']} <{item['mimeType']}> ({item['id']}) {item['parents'] if item['parents'] else 'None'}")
-        except Exception as rde:
-            self._lgr.error(repr(rde))
+                    # items 'shared with me' are in my Drive but without a parent
+                    self._lgr.info(F"{item['name']} <{item['mimeType']}> ({item['id']}) "
+                                   F"{item['parents'] if 'parents' in item.keys() else '*None*'}")
+        except Exception as rfex:
+            self._lgr.error( repr(rfex) )
 
     def find_all_folders(self):
         """FIND all the folders on my drive."""
@@ -184,8 +186,8 @@ class MhsDriveAccess:
                 page_token = response.get("nextPageToken", None)
                 if page_token is None:
                     break
-        except Exception as ffe:
-            self._lgr.error(repr(ffe))
+        except Exception as ffex:
+            self._lgr.error( repr(ffex) )
 
 # END class MhsDriveAccess
 
@@ -195,11 +197,11 @@ def process_args():
                                 prog="driveAccess.py")
     # optional arguments
     arg_parser.add_argument("--folders", action = "store_true", help = "Get information on all my Google drive FOLDERS")
-    arg_parser.add_argument("-s", "--send", help = "path/name of a file|folder to send")
+    arg_parser.add_argument("-s", "--send", metavar = "PATHNAME", help = F"path{osp.sep}name of a file|folder to SEND")
     arg_parser.add_argument("-p", "--parent", default = "root", help = "name of the Drive parent folder to send to")
     arg_parser.add_argument("-t", "--type", default = "txt",
                             help = F"type of files to gather info on:\n\t{repr(FILE_MIME_TYPE)}")
-    arg_parser.add_argument("-n", "--numfiles", type = int, default = DEFAULT_NUM_FILES,
+    arg_parser.add_argument("-n", "--numfiles", type = int, default = DEFAULT_NUM_FILES, metavar = "NUM",
                             help = F"number of files to gather info on (max = {MAX_NUM_FILES})")
     return arg_parser
 
@@ -208,14 +210,14 @@ def process_input_parameters(argx:list):
     args = process_args().parse_args(argx)
 
     if args.send and not osp.isdir(args.send) and not osp.isfile(args.send):
-        raise Exception(F"File path '{args.send}' does not exist! Exiting...")
+        raise Exception(F"File path '{args.send}' does NOT exist! Exiting...")
 
     if args.parent not in FOLDER_IDS.keys():
-        raise Exception(F"Parent folder '{args.parent}' does not exist! Exiting...")
+        raise Exception(F"Parent folder '{args.parent}' does NOT exist! Exiting...")
     parent_id = FOLDER_IDS[args.parent]
 
     if args.type not in FILE_MIME_TYPE.keys():
-        raise Exception(F"file type '{args.type}' does not exist! Exiting...")
+        raise Exception(F"file type '{args.type}' does NOT exist! Exiting...")
     mime_type = FILE_MIME_TYPE[args.type]
 
     return args.folders, args.send, args.parent, parent_id, mime_type, args.numfiles

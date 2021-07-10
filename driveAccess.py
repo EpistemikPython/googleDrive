@@ -11,7 +11,7 @@ __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __google_api_python_client_py3_version__ = "1.2"
 __created__ = "2021-05-14"
-__updated__ = "2021-07-08"
+__updated__ = "2021-07-09"
 
 import glob
 import os
@@ -98,7 +98,7 @@ class MhsDriveAccess:
     def end_session(self):
         """RELEASE this drive session."""
         self._lock.release()
-        self._lgr.debug(F"released Drive lock at {get_current_time()}")
+        self._lgr.info(F"released Drive lock at {get_current_time()}")
 
     def send_folder(self, fpath:str, parent_id:str, wildcard:str = '*'):
         """SEND the files in a folder to my Google drive."""
@@ -149,8 +149,7 @@ class MhsDriveAccess:
             return
         try:
             results = self.fserv.list( q = F"mimeType='{p_mimetype}'",
-                                       spaces = "drive",
-                                       pageSize = p_numitems,
+                                       spaces = "drive",  pageSize = p_numitems,
                                        fields = "files(name, id, parents, mimeType)" ).execute()
             items = results.get("files", [])
             if not items:
@@ -161,7 +160,7 @@ class MhsDriveAccess:
                 for item in items:
                     # items 'shared with me' are in my Drive but without a parent
                     self._lgr.info(F"{item['name']} <{item['mimeType']}> ({item['id']}) "
-                                   F"{item['parents'] if 'parents' in item.keys() else '*None*'}")
+                                   F"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
         except Exception as rfex:
             self._lgr.error( repr(rfex) )
 
@@ -177,8 +176,7 @@ class MhsDriveAccess:
             self._lgr.info(" Name\t\t(Id)\t\t\t[parent id]")
             mime_type = FILE_MIME_TYPE["gfldr"]
             while True:
-                response = self.fserv.list( q = F"mimeType='{mime_type}'",
-                                            spaces = "drive",
+                response = self.fserv.list( q = F"mimeType='{mime_type}'",  spaces = "drive",
                                             fields = "nextPageToken, files(id, name, parents)",
                                             pageToken = page_token ).execute()
                 for item in response.get("files", []):
@@ -235,31 +233,33 @@ def main_drive(argl:list):
     try:
         mhs.begin_session()
         if folders:
-            print("test finding folders:")
+            log_control.show("test finding folders:")
             mhs.find_all_folders()
 
         elif senditem:
             if osp.isdir( senditem ):
-                print(F"test upload of files in folder '{senditem}' to Drive folder: {parent if parent else 'root'}")
+                log_control.show(F"test upload of files in folder '{senditem}' to Drive folder: {parent if parent else 'root'}")
                 mhs.send_folder(senditem, parent_id)
             else:
-                print(F"test upload of file: {senditem} to Drive folder: {parent if parent else 'root'}")
+                log_control.show(F"test upload of file: {senditem} to Drive folder: {parent if parent else 'root'}")
                 mhs.send_file(senditem, parent_id)
 
         elif MAX_NUM_FILES >= numfiles > 0:
-            print(F"test reading info from {numfiles} {mimetype} files:")
+            log_control.show(F"test reading info from {numfiles} {mimetype} files:")
             mhs.read_file_info(mimetype, numfiles)
 
         else:
-            print("do NOTHING...")
+            log_control.show("do NOTHING...")
 
     except Exception as mex:
-        print( repr(mex) )
+        msg = repr(mex)
+        print( msg )
+        lgr.error( msg )
     finally:
         if mhs:
             mhs.end_session()
 
 
 if __name__ == "__main__":
-    main_drive(sys.argv[1:])
+    main_drive( sys.argv[1:] )
     exit()

@@ -11,7 +11,7 @@ __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __google_api_python_client_py3_version__ = "1.2"
 __created__ = "2021-05-14"
-__updated__ = "2021-07-09"
+__updated__ = "2021-07-26"
 
 import glob
 import os
@@ -24,10 +24,10 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-sys.path.append("/newdata/dev/git/Python/utils")
+sys.path.append("/home/marksa/git/Python/utils")
 from mhsLogging import get_simple_logger, MhsLogger, DEFAULT_LOG_LEVEL
 from mhsUtils import *
-SECRETS_DIR:str = F"{BASE_PYTHON_FOLDER}/Google/Drive/secrets"
+SECRETS_DIR:str = osp.join(BASE_PYTHON_FOLDER, "google" + osp.sep + "drive" + osp.sep + "secrets")
 sys.path.append(SECRETS_DIR)
 from folder_ids import FOLDER_IDS
 
@@ -80,7 +80,7 @@ def get_credentials():
 
 class MhsDriveAccess:
     """Start a locked session, read/write to my google drive, end the session."""
-    def __init__(self, p_logger:lg.Logger=None):
+    def __init__(self, p_logger:lg.Logger = None):
         self._lgr = p_logger if p_logger else get_simple_logger(self.__class__.__name__, level = "INFO")
         # prevent different instances/threads from writing at the same time
         self._lock = threading.Lock()
@@ -191,8 +191,8 @@ class MhsDriveAccess:
 
 
 def process_args():
-    arg_parser = ArgumentParser(description="Send to or request information from my Google Drive",
-                                prog="driveAccess.py")
+    arg_parser = ArgumentParser( description = "Send to or request information from my Google Drive",
+                                 prog = "driveAccess.py" )
     # optional arguments
     arg_parser.add_argument("--folders", action = "store_true", help = "Get information on all my Google drive FOLDERS")
     arg_parser.add_argument("-s", "--send", metavar = "PATHNAME", help = F"path{osp.sep}name of a file|folder to SEND")

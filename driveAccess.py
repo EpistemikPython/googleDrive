@@ -11,7 +11,7 @@ __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __google_api_python_client_py3_version__ = "1.2"
 __created__ = "2021-05-14"
-__updated__ = "2021-07-26"
+__updated__ = "2021-08-11"
 
 import glob
 import os
@@ -194,35 +194,45 @@ def process_args():
     arg_parser = ArgumentParser( description = "Send to or request information from my Google Drive",
                                  prog = "driveAccess.py" )
     # optional arguments
-    arg_parser.add_argument("--folders", action = "store_true", help = "Get information on all my Google drive FOLDERS")
-    arg_parser.add_argument("-s", "--send", metavar = "PATHNAME", help = F"path{osp.sep}name of a file|folder to SEND")
-    arg_parser.add_argument("-p", "--parent", default = "root", help = "name of the Drive parent folder to send to")
-    arg_parser.add_argument("-t", "--type", default = "txt",
-                            help = F"type of files to gather info on:\n\t{repr(FILE_MIME_TYPE)}")
-    arg_parser.add_argument("-n", "--numfiles", type = int, default = DEFAULT_NUM_FILES, metavar = "NUM",
-                            help = F"number of files to gather info on (max = {MAX_NUM_FILES})")
+    mex_group = arg_parser.add_mutually_exclusive_group(required=True)
+    mex_group.add_argument("--folders", action = "store_true", help = "Get information on ALL my Google drive FOLDERS")
+    mex_group.add_argument("-s", "--send", metavar = "PATHNAME",
+                           help = F"path{osp.sep}name of a local file|folder to SEND to Google drive")
+    mex_group.add_argument("--gather", action = "store_true", help = "Get information on certain Google drive FILES")
+    send_group = arg_parser.add_argument_group("Send options")
+    send_group.add_argument("-p", "--parent", default = "root", help = "name of the Drive parent folder to send to")
+    gather_group = arg_parser.add_argument_group("Gather options")
+    gather_group.add_argument("-t", "--type", default = "txt",
+                              help = F"type of files to gather info on:\n\t{repr(FILE_MIME_TYPE)}")
+    gather_group.add_argument("-n", "--numfiles", type = int, default = DEFAULT_NUM_FILES, metavar = "NUM",
+                              help = F"number of files to gather info on (max = {MAX_NUM_FILES})")
     return arg_parser
 
 
 def process_input_parameters(argx:list):
     args = process_args().parse_args(argx)
 
-    if args.send and not osp.isdir(args.send) and not osp.isfile(args.send):
-        raise Exception(F"File path '{args.send}' does NOT exist! Exiting...")
-
-    if args.parent not in FOLDER_IDS.keys():
-        raise Exception(F"Parent folder '{args.parent}' does NOT exist! Exiting...")
+    if args.send:
+        if not osp.isdir(args.send) and not osp.isfile(args.send):
+            raise Exception(F"File path '{args.send}' does NOT exist! Exiting...")
+        if args.parent not in FOLDER_IDS.keys():
+            raise Exception(F"Parent folder '{args.parent}' does NOT exist! Exiting...")
     parent_id = FOLDER_IDS[args.parent]
 
-    if args.type not in FILE_MIME_TYPE.keys():
-        raise Exception(F"file type '{args.type}' does NOT exist! Exiting...")
+    numfiles = 0
+    if args.gather:
+        if args.type not in FILE_MIME_TYPE.keys():
+            raise Exception(F"file type '{args.type}' does NOT exist! Exiting...")
+        numfiles = DEFAULT_NUM_FILES if args.numfiles <= 0 or args.numfiles > MAX_NUM_FILES else args.numfiles
     mime_type = FILE_MIME_TYPE[args.type]
 
-    return args.folders, args.send, args.parent, parent_id, mime_type, args.numfiles
+    choice = "folders" if args.folders else "gather" if args.gather else args.send
+    return choice, parent_id, mime_type, numfiles
 
 
 def main_drive(argl:list):
-    folders, senditem, parent, parent_id, mimetype, numfiles = process_input_parameters(argl)
+    choice, parent_id, mimetype, numfiles = process_input_parameters(argl)
+    parent = list(FOLDER_IDS.keys())[list(FOLDER_IDS.values()).index(parent_id)]
 
     log_control = MhsLogger(base_run_file, con_level = DEFAULT_LOG_LEVEL)
     log_control.show(F"Runtime = {get_current_time()}")
@@ -232,27 +242,25 @@ def main_drive(argl:list):
     mhs = MhsDriveAccess(lgr)
     try:
         mhs.begin_session()
-        if folders:
+        if choice == "folders":
             log_control.show("test finding folders:")
             mhs.find_all_folders()
 
-        elif senditem:
-            if osp.isdir( senditem ):
-                log_control.show(F"test upload of files in folder '{senditem}' to Drive folder: {parent if parent else 'root'}")
-                mhs.send_folder(senditem, parent_id)
-            else:
-                log_control.show(F"test upload of file: {senditem} to Drive folder: {parent if parent else 'root'}")
-                mhs.send_file(senditem, parent_id)
-
-        elif MAX_NUM_FILES >= numfiles > 0:
+        # gather info
+        elif choice == "gather":
             log_control.show(F"test reading info from {numfiles} {mimetype} files:")
             mhs.read_file_info(mimetype, numfiles)
 
         else:
-            log_control.show("do NOTHING...")
+            if osp.isdir( choice ):
+                log_control.show(F"test upload of files in folder '{choice}' to Drive folder: {parent}")
+                mhs.send_folder(choice, parent_id)
+            else:
+                log_control.show(F"test upload of file: {choice} to Drive folder: {parent}")
+                mhs.send_file(choice, parent_id)
 
-    except Exception as mex:
-        msg = repr(mex)
+    except Exception as mdex:
+        msg = repr(mdex)
         print( msg )
         lgr.error( msg )
     finally:

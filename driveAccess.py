@@ -13,10 +13,10 @@ __google_api_python_client_py3_version__ = "1.2"
 __created__ = "2021-05-14"
 __updated__ = "2021-08-11"
 
-import glob
-import os
-import shutil
 import sys
+import os
+import glob
+import shutil
 import threading
 from argparse import ArgumentParser
 from google.auth.transport.requests import Request
@@ -44,15 +44,20 @@ DRIVE_ACCESS_SCOPE:list = ["https://www.googleapis.com/auth/drive"]
 DEFAULT_NUM_FILES = 32
 MAX_NUM_FILES     = 256
 FILE_MIME_TYPE = {
-    "txt"     : "text/plain",
-    "info"    : "text/plain",
-    "gnc"     : "application/x-gnucash",
-    "gnucash" : "application/x-gnucash",
-    "gcm"     : "application/octet-stream", # gnucash metafile
-    "gfldr"   : "application/vnd.google-apps.folder",
-    "gdoc"    : "application/vnd.google-apps.document",
-    "gsht"    : "application/vnd.google-apps.spreadsheet"
+    "txt"     : "text/plain" ,
+    "info"    : "text/plain" ,
+    "gnc"     : "application/x-gnucash" ,
+    "gnucash" : "application/x-gnucash" ,
+    "gcm"     : "application/octet-stream" , # gnucash metafile
+    "gfldr"   : "application/vnd.google-apps.folder" ,
+    "gdoc"    : "application/vnd.google-apps.document" ,
+    "gsht"    : "application/vnd.google-apps.spreadsheet" ,
+    "odt"     : "application/vnd.oasis.opendocument.text" ,
+    "ods"     : "application/vnd.oasis.opendocument.spreadsheet"
 }
+FOLDERS_LABEL = "folders"
+GATHER_LABEL  = "gather"
+REFERENCE_FILE = "ref-file"
 
 def get_credentials():
     """Get the proper credentials needed to access my Google drive."""
@@ -106,13 +111,19 @@ class MhsDriveAccess:
         if not self.fserv:
             self._lgr.exception("No Session started!")
             return
+        num_sent = 0
         try:
-            fgw = glob.glob(fpath + os.sep + wildcard)
+            fgw = glob.glob(fpath + osp.sep + wildcard)
             for item in fgw:
                 if osp.isfile(item):
-                    self.send_file(item, parent_id)
+                    file_name = get_base_filename(item)
+                    if file_name != REFERENCE_FILE:
+                        self.send_file(item, parent_id)
+                        num_sent += 1
         except Exception as sfdex:
             self._lgr.error( repr(sfdex) )
+
+        self._lgr.info(F"Sent {num_sent} files to {parent_id}.")
 
     def send_file(self, filepath:str, parent_id:str) -> str:
         """SEND a file to my Google drive
@@ -130,11 +141,10 @@ class MhsDriveAccess:
 
             file_metadata = {"name":get_filename(filepath), "parents":[parent_id]}
             media = MediaFileUpload(filepath, mimetype = mime_type, resumable = True)
-            self._lgr.info(F"Send file '{filepath}' to Drive://{parent_id}/")
-
+            self._lgr.info(F"Sending file '{filepath}' to Drive://{parent_id}/")
             file = self.fserv.create(body = file_metadata, media_body = media, fields = "id").execute()
             response = file.get("id")
-            self._lgr.info(F"Sent file: Id = {response}")
+            self._lgr.info(F"Success: Google Id = {response}")
         except Exception as sfex:
             response = repr(sfex)
             self._lgr.error(response)
@@ -195,10 +205,10 @@ def process_args():
                                  prog = "driveAccess.py" )
     # optional arguments
     mex_group = arg_parser.add_mutually_exclusive_group(required=True)
-    mex_group.add_argument("--folders", action = "store_true", help = "Get information on ALL my Google drive FOLDERS")
+    mex_group.add_argument(F"--{FOLDERS_LABEL}", action = "store_true", help = "Get information on ALL my Google drive FOLDERS")
     mex_group.add_argument("-s", "--send", metavar = "PATHNAME",
                            help = F"path{osp.sep}name of a local file|folder to SEND to Google drive")
-    mex_group.add_argument("--gather", action = "store_true", help = "Get information on certain Google drive FILES")
+    mex_group.add_argument(F"--{GATHER_LABEL}", action = "store_true", help = "Get information on certain Google drive FILES")
     send_group = arg_parser.add_argument_group("Send options")
     send_group.add_argument("-p", "--parent", default = "root", help = "name of the Drive parent folder to send to")
     gather_group = arg_parser.add_argument_group("Gather options")
@@ -226,7 +236,7 @@ def process_input_parameters(argx:list):
         numfiles = DEFAULT_NUM_FILES if args.numfiles <= 0 or args.numfiles > MAX_NUM_FILES else args.numfiles
     mime_type = FILE_MIME_TYPE[args.type]
 
-    choice = "folders" if args.folders else "gather" if args.gather else args.send
+    choice = FOLDERS_LABEL if args.folders else GATHER_LABEL if args.gather else args.send
     return choice, parent_id, mime_type, numfiles
 
 
@@ -235,19 +245,20 @@ def main_drive(argl:list):
     parent = list(FOLDER_IDS.keys())[list(FOLDER_IDS.values()).index(parent_id)]
 
     log_control = MhsLogger(base_run_file, con_level = DEFAULT_LOG_LEVEL)
-    log_control.show(F"Runtime = {get_current_time()}")
+    start_time = dt.now()
+    log_control.show(F"Start time = {start_time.strftime(RUN_DATETIME_FORMAT)}")
     lgr = log_control.get_logger()
     lgr.debug( repr(lgr.handlers) )
 
     mhs = MhsDriveAccess(lgr)
     try:
         mhs.begin_session()
-        if choice == "folders":
-            log_control.show("test finding folders:")
+        if choice == FOLDERS_LABEL:
+            log_control.show(F"test finding {FOLDERS_LABEL}:")
             mhs.find_all_folders()
 
         # gather info
-        elif choice == "gather":
+        elif choice == GATHER_LABEL:
             log_control.show(F"test reading info from {numfiles} {mimetype} files:")
             mhs.read_file_info(mimetype, numfiles)
 
@@ -266,6 +277,11 @@ def main_drive(argl:list):
     finally:
         if mhs:
             mhs.end_session()
+
+    end_time = dt.now()
+    log_control.show(F"Finish time = {end_time.strftime(RUN_DATETIME_FORMAT)}")
+    run_time = (end_time - start_time).total_seconds()
+    print(F"\nRunning time = {(run_time // 60)} minutes, {(run_time % 60):2.4} seconds\n")
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __google_api_python_client_py3_version__ = "1.2"
 __created__ = "2021-05-14"
-__updated__ = "2021-08-11"
+__updated__ = "2021-08-16"
 
 import sys
 import os
@@ -25,7 +25,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 sys.path.append("/home/marksa/git/Python/utils")
-from mhsLogging import get_simple_logger, MhsLogger, DEFAULT_LOG_LEVEL
+from mhsLogging import get_simple_logger, MhsLogger, DEFAULT_LOG_LEVEL, DEFAULT_LOG_FOLDER
 from mhsUtils import *
 SECRETS_DIR:str = osp.join(BASE_PYTHON_FOLDER, "google" + osp.sep + "drive" + osp.sep + "secrets")
 sys.path.append(SECRETS_DIR)
@@ -203,14 +203,20 @@ class MhsDriveAccess:
 def process_args():
     arg_parser = ArgumentParser( description = "Send to or request information from my Google Drive",
                                  prog = "driveAccess.py" )
-    # optional arguments
-    mex_group = arg_parser.add_mutually_exclusive_group(required=True)
+    # one argument required
+    req_group = arg_parser.add_argument_group("ONE argument REQUIRED")
+    mex_group = req_group.add_mutually_exclusive_group(required=True)
     mex_group.add_argument(F"--{FOLDERS_LABEL}", action = "store_true", help = "Get information on ALL my Google drive FOLDERS")
     mex_group.add_argument("-s", "--send", metavar = "PATHNAME",
                            help = F"path{osp.sep}name of a local file|folder to SEND to Google drive")
     mex_group.add_argument(F"--{GATHER_LABEL}", action = "store_true", help = "Get information on certain Google drive FILES")
+    # optional arguments
+    arg_parser.add_argument("-l", "--log_location", metavar = "PATHNAME",
+                            help = F"path{osp.sep}name of a local folder where logs will be saved")
+    # send options
     send_group = arg_parser.add_argument_group("Send options")
     send_group.add_argument("-p", "--parent", default = "root", help = "name of the Drive parent folder to send to")
+    # gather options
     gather_group = arg_parser.add_argument_group("Gather options")
     gather_group.add_argument("-t", "--type", default = "txt",
                               help = F"type of files to gather info on:\n\t{repr(FILE_MIME_TYPE)}")
@@ -237,14 +243,14 @@ def process_input_parameters(argx:list):
     mime_type = FILE_MIME_TYPE[args.type]
 
     choice = FOLDERS_LABEL if args.folders else GATHER_LABEL if args.gather else args.send
-    return choice, parent_id, mime_type, numfiles
+    return choice, parent_id, mime_type, numfiles, args.log_location if args.log_location else DEFAULT_LOG_FOLDER
 
 
 def main_drive(argl:list):
-    choice, parent_id, mimetype, numfiles = process_input_parameters(argl)
+    choice, parent_id, mimetype, numfiles, logloc = process_input_parameters(argl)
     parent = list(FOLDER_IDS.keys())[list(FOLDER_IDS.values()).index(parent_id)]
 
-    log_control = MhsLogger(base_run_file, con_level = DEFAULT_LOG_LEVEL)
+    log_control = MhsLogger(base_run_file, con_level = DEFAULT_LOG_LEVEL, folder = logloc)
     start_time = dt.now()
     log_control.show(F"Start time = {start_time.strftime(RUN_DATETIME_FORMAT)}")
     lgr = log_control.get_logger()

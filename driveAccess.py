@@ -260,20 +260,20 @@ def main_drive(argl:list):
     try:
         mhs.begin_session()
         if choice == FOLDERS_LABEL:
-            log_control.show(F"test finding {FOLDERS_LABEL}:")
+            log_control.show(F"find all my {FOLDERS_LABEL}:")
             mhs.find_all_folders()
 
         # gather info
         elif choice == GATHER_LABEL:
-            log_control.show(F"test reading info from {numfiles} {mimetype} files:")
+            log_control.show(F"read info from {numfiles} random {mimetype} files:")
             mhs.read_file_info(mimetype, numfiles)
 
         else:
             if osp.isdir( choice ):
-                log_control.show(F"test upload of files in folder '{choice}' to Drive folder: {parent}")
+                log_control.show(F"upload all files in folder '{choice}' to Drive folder: {parent}")
                 mhs.send_folder(choice, parent_id)
             else:
-                log_control.show(F"test upload of file: {choice} to Drive folder: {parent}")
+                log_control.show(F"upload file '{choice}' to Drive folder: {parent}")
                 mhs.send_file(choice, parent_id)
 
     except Exception as mdex:

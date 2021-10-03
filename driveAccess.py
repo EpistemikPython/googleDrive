@@ -11,7 +11,7 @@ __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __google_api_python_client_py3_version__ = "1.2"
 __created__ = "2021-05-14"
-__updated__ = "2021-08-16"
+__updated__ = "2021-10-03"
 
 import sys
 import os
@@ -77,7 +77,7 @@ def get_credentials():
         with open(JSON_TOKEN, 'w') as token:
             token.write( creds.to_json() )
         if osp.exists(DRIVE_TOKEN_PATH):
-            os.rename(DRIVE_TOKEN_PATH, DRIVE_TOKEN_PATH + osp.extsep + file_ts)
+            os.rename(DRIVE_TOKEN_PATH, DRIVE_TOKEN_PATH + osp.extsep + get_current_time(FILE_DATETIME_FORMAT))
         shutil.move(JSON_TOKEN, SECRETS_DIR)
 
     return creds

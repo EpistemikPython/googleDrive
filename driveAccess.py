@@ -5,14 +5,15 @@
 #
 # includes some code from Google quickstart examples
 #
-# Copyright (c) 2021-23 Mark Sattolo <epistemik@gmail.com>
+# Copyright (c) 2024 Mark Sattolo <epistemik@gmail.com>
 
 __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
-__google_api_python_client_version__     = "2.23.0"
-__google_api_python_client_py3_version__ = "1.2"
+__python_version__ = "3.6+"
+__google_api_python_client_version__ = "2.137.0"
+__google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2021-05-14"
-__updated__ = "2023-12-16"
+__updated__ = "2024-07-15"
 
 from sys import argv, path
 import os
@@ -28,7 +29,7 @@ from googleapiclient.http import MediaFileUpload
 path.append("/home/marksa/git/Python/utils")
 from mhsLogging import get_simple_logger, MhsLogger, DEFAULT_LOG_LEVEL, DEFAULT_LOG_FOLDER
 from mhsUtils import *
-SECRETS_DIR:str = osp.join(BASE_PYTHON_FOLDER, "google" + osp.sep + "drive" + osp.sep + "secrets")
+SECRETS_DIR:str = osp.join(BASE_PYTHON_FOLDER, f"google{osp.sep}drive{osp.sep}secrets")
 path.append(SECRETS_DIR)
 from folder_ids import FOLDER_IDS
 
@@ -37,8 +38,8 @@ base_run_file = get_base_filename(__file__)
 # see https://github.com/googleapis/google-api-python-client/issues/299
 lg.getLogger("googleapiclient.discovery_cache").setLevel(lg.ERROR)
 
-JSON_TOKEN = "token.json"
-CREDENTIALS_FILE:str    = osp.join(SECRETS_DIR, "credentials.json")
+JSON_TOKEN = f"token{osp.extsep}json"
+CREDENTIALS_FILE:str    = osp.join(SECRETS_DIR, f"credentials{osp.extsep}json")
 DRIVE_TOKEN_PATH:str    = osp.join(SECRETS_DIR, JSON_TOKEN)
 DRIVE_ACCESS_SCOPE:list = ["https://www.googleapis.com/auth/drive"]
 
@@ -60,7 +61,7 @@ FOLDERS_LABEL  = "folders"
 GATHER_LABEL   = "gather"
 REFERENCE_FILE = "ref-file"
 
-def get_credentials(lgr:lg.Logger=None):
+def get_credentials(lgr:lg.Logger):
     """Get the proper credentials needed to access my Google drive."""
     creds = None
     # The TOKEN file stores the user's access & refresh tokens and is
@@ -70,12 +71,10 @@ def get_credentials(lgr:lg.Logger=None):
     # if there are no (valid) credentials available, let the user log in
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            if lgr:
-                lgr.warning("Need to refresh creds.")
+            lgr.warning("Need to refresh creds.")
             creds.refresh( Request() )
         else:
-            if lgr:
-                lgr.warning("Need to regenerate creds.")
+            lgr.warning("Need to regenerate creds.")
             flow = InstalledAppFlow.from_client_secrets_file( CREDENTIALS_FILE, DRIVE_ACCESS_SCOPE )
             creds = flow.run_local_server(port=0)
         # save the credentials for the next run
@@ -126,7 +125,7 @@ class MhsDriveAccess:
                         self.send_file(item, parent_id)
                         num_sent += 1
         except Exception as sfdex:
-            self.lgr.error(repr(sfdex))
+            self.lgr.exception(sfdex)
 
         self.lgr.info(F"Sent {num_sent} files to {parent_id}.")
 
@@ -151,8 +150,8 @@ class MhsDriveAccess:
             response = file.get("id")
             self.lgr.info(F"Success: Google Id = {response}")
         except Exception as sfex:
+            self.lgr.exception(sfex)
             response = repr(sfex)
-            self.lgr.error(response)
 
         return response
 
@@ -176,7 +175,7 @@ class MhsDriveAccess:
                     self.lgr.info(F"{item['name']} <{item['mimeType']}> ({item['id']}) "
                                    F"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
         except Exception as rfex:
-            self.lgr.error(repr(rfex))
+            self.lgr.exception(rfex)
 
     def find_all_folders(self):
         """FIND all the folders on my drive."""
@@ -198,12 +197,11 @@ class MhsDriveAccess:
                 if page_token is None:
                     break
         except Exception as ffex:
-            self.lgr.error(repr(ffex))
-
+            self.lgr.exception(ffex)
 # END class MhsDriveAccess
 
 
-def process_args():
+def prepare_args():
     arg_parser = ArgumentParser( description = "Send data to or request information from my Google Drive", prog = "python3.9 driveAccess.py" )
     # one argument required
     req_group = arg_parser.add_argument_group("ONE argument REQUIRED")
@@ -225,9 +223,8 @@ def process_args():
                                 help = F"number of files to gather info on (max = {MAX_NUM_FILES})")
     return arg_parser
 
-
 def process_input_parameters(argx:list):
-    args = process_args().parse_args(argx)
+    args = prepare_args().parse_args(argx)
 
     if args.send:
         if not osp.isdir(args.send) and not osp.isfile(args.send):
@@ -246,7 +243,6 @@ def process_input_parameters(argx:list):
     choice = FOLDERS_LABEL if args.folders else GATHER_LABEL if args.gather else args.send
     return choice, parent_id, mime_type, numfiles, args.log_location if args.log_location else DEFAULT_LOG_FOLDER
 
-
 def main_drive(argl:list):
     start_time = dt.now()
     choice, parent_id, mimetype, numfiles, logloc = process_input_parameters(argl)
@@ -257,33 +253,29 @@ def main_drive(argl:list):
     lgr.debug( repr(lgr.handlers) )
     lgr.info(F"Start time = {start_time.strftime(RUN_DATETIME_FORMAT)}")
 
-    mhs = MhsDriveAccess(lgr)
+    mhsda = MhsDriveAccess(lgr)
     try:
-        mhs.begin_session()
+        mhsda.begin_session()
         if choice == FOLDERS_LABEL:
             lgr.info(F"find all my {FOLDERS_LABEL}:")
-            mhs.find_all_folders()
-
+            mhsda.find_all_folders()
         # gather info
         elif choice == GATHER_LABEL:
             lgr.info(F"read info from {numfiles} random {mimetype} files:")
-            mhs.read_file_info(mimetype, numfiles)
-
+            mhsda.read_file_info(mimetype, numfiles)
         else:
-            if osp.isdir( choice ):
+            if osp.isdir(choice):
                 lgr.info(F"upload all files in folder '{choice}' to Drive folder: {parent}")
-                mhs.send_folder(choice, parent_id)
+                mhsda.send_folder(choice, parent_id)
             else:
                 lgr.info(F"upload file '{choice}' to Drive folder: {parent}")
-                mhs.send_file(choice, parent_id)
-
+                mhsda.send_file(choice, parent_id)
     except Exception as mdex:
-        msg = repr(mdex)
-        print( msg )
-        lgr.error( msg )
+        lgr.exception(mdex)
+        return 66
     finally:
-        if mhs:
-            mhs.end_session()
+        if mhsda:
+            mhsda.end_session()
 
     end_time = dt.now()
     lgr.info(F"Finish time = {end_time.strftime(RUN_DATETIME_FORMAT)}")
@@ -292,5 +284,4 @@ def main_drive(argl:list):
 
 
 if __name__ == "__main__":
-    main_drive( argv[1:] )
-    exit()
+    exit( main_drive(argv[1:]) )

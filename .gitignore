@@ -6,6 +6,7 @@
 /send
 folder_ids.py
 /secrets
+/samples
 credentials*
 token*
 **/json/

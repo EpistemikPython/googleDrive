@@ -1,0 +1,69 @@
+Search for all files and folders on the current user's My Drive
+Use the files.list method without any parameters to return all files and folders.
+
+GET https://www.googleapis.com/drive/v3/files
+
+Search for specific files or folders on the current user's My Drive
+To search for a specific set of files or folders, use the query string q field with the files.list method to filter the files to return 
+by combining one or more search terms.
+
+A query string contains the following three parts:
+
+ 'query_term' 'operator' 'values'
+
+where:
+
+query_term: the query term or field to search upon.
+
+operator:   specifies the condition for the query term.
+
+values:     are the specific values you want to use to filter your search results.
+
+
+To view the query terms and operators that you can use filter files and folders, see "Search query terms and operators".
+For example, the following query string filters the search to only return folders by setting the MIME type:
+q: mimeType = 'application/vnd.google-apps.folder'
+
+For more information on MIME types, see Google Workspace and Google Drive supported MIME types.
+
+
+Query string examples
+=====================
+
+The following table lists examples of some basic query strings. The actual code differs depending on the client library you use for your search.
+
+Important: The following query terms use fields from the Drive API v3. Some resource fields changed between v2 and v3. 
+For example, files.name replaces files.title. If you're using Drive API v2, adjust these queries to use the v2 fields. 
+For more information, see Drive API v2 and v3 comparison reference.
+You must also escape special characters in your file names to make sure the query works correctly. 
+For example, if a filename contains both an apostrophe (') and a backslash ("\") character, 
+use a backslash to escape them: name contains 'quinn\'s paper\\essay'.
+
+Note: These examples use the unencoded q parameter, where name = 'hello' is encoded as name+%3d+%27hello%27. 
+Client libraries handle this encoding automatically.
+
+ What you want to query	                                                             Example
+------------------------                                                            ---------
+Files with the name "hello"	                                                        name = 'hello'
+Files with a name containing the words "hello" and "goodbye"	                    name contains 'hello' and name contains 'goodbye'
+Files with a name that does not contain the word "hello"	                        not name contains 'hello'
+Files that contain the text "important" and in the trash	                        fullText contains 'important' and trashed = true
+Files that contain the word "hello"	                                                fullText contains 'hello'
+Files that don't have the word "hello"	                                            not fullText contains 'hello'
+Files that contain the exact phrase "hello world"	                                fullText contains '"hello world"'
+Files with a query that contains the "\" character (for example, "\authors")        fullText contains '\\authors'
+Files that are folders	                                                            mimeType = 'application/vnd.google-apps.folder'
+Files that are not folders	                                                        mimeType != 'application/vnd.google-apps.folder'
+Files modified after a given date (default time zone is UTC)	                    modifiedTime > '2012-06-04T12:00:00'
+Image or video files modified after a specific date	                                modifiedTime > '2012-06-04T12:00:00' and (mimeType contains 'image/' or mimeType contains 'video/')
+Files that are starred	                                                            starred = true
+Files within a collection (for example, the folder ID in the parents collection)	'1234567' in parents
+Files in an application data folder in a collection	                                'appDataFolder' in parents
+Files for which user "test@example.org" is the owner	                            'test@example.org' in owners
+Files for which user "test@example.org" has write permission	                    'test@example.org' in writers
+Files for which members of the group "group@example.org" have write permission	    'group@example.org' in writers
+Files shared with the authorized user with "hello" in the name	                    sharedWithMe and name contains 'hello'
+Files with a custom file property visible to all apps	                            properties has { key='mass' and value='1.3kg' }
+Files with a custom file property private to the requesting app	                    appProperties has { key='additionalID' and value='8e8aceg2af2ge72e78' }
+Files that have not been shared with anyone or domains 
+(only private, or shared with specific users or groups)	                            visibility = 'limited'

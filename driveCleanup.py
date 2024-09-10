@@ -20,7 +20,7 @@ from driveAccess import *
 from googleapiclient.errors import HttpError
 
 DEFAULT_DATE = "2027-09-13"
-DEFAULT_FILETYPE  = "txt"
+DEFAULT_FILETYPE  = "gcm"
 DEFAULT_PARENT_FOLDER = "Test"
 base_run_file = get_base_filename(__file__)
 
@@ -34,7 +34,7 @@ def get_files():
     # q: name = '2021' and mimeType = 'application/vnd.google-apps.folder' and '1fJ9TFZOe8G9PUMfC2Ts06sRnEPJQo7zG' in parents
     items = []
     try:
-        query = f"mimeType='{mimetype}' and modifiedTime < '{fdate}' and '{parent_id}' in parents"
+        query = f"modifiedTime < '{fdate}' and '{parent_id}' in parents"
         # query2 = f"'{parent_id}' in parents"
         show(f"query = '{query}'")
         results = mhsda.service.list(q = query, spaces = "drive", fields = "files(name, id, parents, mimeType, modifiedTime)").execute()
@@ -43,23 +43,25 @@ def get_files():
             lgr.warning("No files found?!")
             return items
         else:
-            show(f"{len(items)} {mimetype} files retrieved:")
+            show(f"files retrieved:")
             show(" Name\t\t\t\t<type>\t\t\t\t%Timestamp%\t\t\t\t(Id)\t\t\t\t\t\t[parent id]")
             for item in items:
                 # items 'shared with me' are in my Drive but WITHOUT a parent
                 show(f"{item['name']} <{item['mimeType']}> %{item['modifiedTime']}% ({item['id']}) "
                      f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
+            show(f">> found {len(items)} files.\n")
     except Exception as rfex:
         lgr.exception(rfex)
 
-    if save_option:
+    if save_option and items:
         save_to_json(base_run_file, items)
 
     return items
 
 def delete_file(p_name, p_file_id):
     """Delete a file.
-    :arg:   p_file_id: ID of the file to delete"""
+    :arg    p_name: name of the file
+    :arg    p_file_id: ID of the file to delete """
 
     if testing_mode:
         show(f"Testing: Would have deleted file '{p_name}' with id = {p_file_id}")
@@ -91,25 +93,29 @@ def get_args(argl:list):
     pid = FOLDER_IDS[args.parent]
     show(f"DELETING files in folder {args.parent}; id = {pid}")
 
-    if args.filetype not in FILE_MIME_TYPE.keys():
-        raise Exception(f"file type '{args.filetype}' does NOT exist! Exiting...")
-    mime_type = FILE_MIME_TYPE[args.filetype]
-    show(f"DELETING '{args.filetype}' files; mimeType = {mime_type}")
+    # if args.filetype not in FILE_MIME_TYPE.keys():
+    #     raise Exception(f"file type '{args.filetype}' does NOT exist! Exiting...")
+    # mime_type = FILE_MIME_TYPE[args.filetype]
+    # show(f"DELETING '{args.filetype}' files; mimeType = {mime_type}")
 
     ad = args.date
     if not ad[:4].isnumeric() and ad[4:6].isnumeric() and ad[6:8].isnumeric():
         raise Exception(f"Date '{ad}' in IMPROPER format.")
     ts = f"{ad}T01:02:03"
     show(f"DELETING files older than: {ts}")
+    show(f"DELETING files with file suffix = '{args.filetype}'")
 
-    return args.save, args.testing, ts, mime_type, pid
+    return args.save, args.testing, ts, args.filetype, pid
 
 def run():
     try:
         mhsda.begin_session()
         files_to_delete = get_files()
         for item in files_to_delete:
-            delete_file(item["name"], item["id"])
+            fname = item["name"]
+            ftype = get_filetype(fname)[1:]
+            if ftype == filetype:
+                delete_file(fname, item["id"])
     except Exception as mdex:
         return mdex
     finally:
@@ -128,8 +134,7 @@ if __name__ == "__main__":
 
     code = 0
     try:
-        save_option, testing_mode, fdate, mimetype, parent_id = get_args(argv[1:])
-        # parent = list(FOLDER_IDS.keys())[list(FOLDER_IDS.values()).index(parent_id)]
+        save_option, testing_mode, fdate, filetype, parent_id = get_args(argv[1:])
 
         mhsda = MhsDriveAccess(lgr)
         run()

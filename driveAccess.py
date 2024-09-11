@@ -10,10 +10,10 @@
 __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.6+"
-__google_api_python_client_version__ = "2.137.0"
+__google_api_python_client_version__ = "2.144.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2021-05-14"
-__updated__ = "2024-07-15"
+__updated__ = "2024-09-11"
 
 from sys import argv, path
 import os
@@ -25,15 +25,14 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 path.append("/home/marksa/git/Python/utils")
-from mhsLogging import get_simple_logger, MhsLogger, DEFAULT_LOG_LEVEL, DEFAULT_LOG_FOLDER
+from mhsLogging import get_simple_logger, MhsLogger, DEFAULT_LOG_FOLDER
 from mhsUtils import *
 SECRETS_DIR:str = osp.join(BASE_PYTHON_FOLDER, f"google{osp.sep}drive{osp.sep}secrets")
 path.append(SECRETS_DIR)
 from folder_ids import FOLDER_IDS
-
-base_run_file = get_base_filename(__file__)
 
 # see https://github.com/googleapis/google-api-python-client/issues/299
 lg.getLogger("googleapiclient.discovery_cache").setLevel(lg.ERROR)
@@ -57,11 +56,11 @@ FILE_MIME_TYPE = {
     "odt"     : "application/vnd.oasis.opendocument.text" ,
     "ods"     : "application/vnd.oasis.opendocument.spreadsheet"
 }
-FOLDERS_LABEL  = "folders"
-GATHER_LABEL   = "gather"
-REFERENCE_FILE = "ref-file"
+FOLDERS_LABEL   = "folders"
+GET_FILES_LABEL = "getfiles"
+REFERENCE_FILE  = "ref-file"
 
-def get_credentials(lgr:lg.Logger):
+def get_credentials():
     """Get the proper credentials needed to access my Google drive."""
     creds = None
     # The TOKEN file stores the user's access & refresh tokens and is
@@ -86,34 +85,35 @@ def get_credentials(lgr:lg.Logger):
 
     return creds
 
-
+# file_metadata = service.files().get(fileId = "your_file_id").execute()
 class MhsDriveAccess:
     """Start a locked session, read/write to my google drive, end the session."""
     def __init__(self, p_logger:lg.Logger = None):
-        self.lgr = p_logger if p_logger else get_simple_logger(self.__class__.__name__, level = "INFO")
+        self._lgr = p_logger if p_logger else get_simple_logger(self.__class__.__name__, level = "INFO")
         # prevent different instances/threads from writing at the same time
         self._lock = threading.Lock()
-        self.lgr.info(F"Launch {self.__class__.__name__} instance with lock = {self._lock.__str__()} at {get_current_time()}")
-        self.fserv = None
+        self._lgr.info(f"Launch {self.__class__.__name__} instance with lock = {self._lock.__str__()} at {get_current_time()}")
+        self.service = None
 
     def begin_session(self):
         """Activate a UNIQUE session to the drive."""
         self._lock.acquire()
-        self.lgr.info(F"acquired Drive lock at {get_current_time()}")
-        creds = get_credentials(self.lgr)
+        self._lgr.info(f"acquired Drive lock at {get_current_time()}")
+        creds = get_credentials()
         service = build("drive", "v3", credentials = creds)
-        self.fserv = service.files()
+        self.service = service.files()
 
     def end_session(self):
         """RELEASE this drive session."""
-        self._lock.release()
-        self.lgr.info(F"released Drive lock at {get_current_time()}")
+        self.service = None
+        if self._lock.locked():
+            self._lock.release()
+            self._lgr.info(f"released Drive lock at {get_current_time()}")
 
-    def send_folder(self, fpath:str, parent_id:str, wildcard:str = '*'):
+    def send_folder(self, fpath:str, wildcard:str = '*'):
         """SEND the files in a folder to my Google drive."""
-        self.lgr.debug(get_current_time())
-        if not self.fserv:
-            self.lgr.exception("No Session started!")
+        if not self.service:
+            self._lgr.warning("No Session!")
             return
         num_sent = 0
         try:
@@ -122,20 +122,19 @@ class MhsDriveAccess:
                 if osp.isfile(item):
                     file_name = get_base_filename(item)
                     if file_name != REFERENCE_FILE:
-                        self.send_file(item, parent_id)
+                        self.send_file(item)
                         num_sent += 1
         except Exception as sfdex:
-            self.lgr.exception(sfdex)
+            self._lgr.exception(sfdex)
 
-        self.lgr.info(F"Sent {num_sent} files to {parent_id}.")
+        self._lgr.info(f"Sent {num_sent} files to {pid}.")
 
-    def send_file(self, filepath:str, parent_id:str) -> str:
+    def send_file(self, filepath:str) -> str:
         """SEND a file to my Google drive
-        :return server response
-        """
-        self.lgr.debug(get_current_time())
-        if not self.fserv:
-            self.lgr.exception("No Session started!")
+        :return server response """
+        self._lgr.debug(get_current_time())
+        if not self.service:
+            self._lgr.warning("No Session!")
             return ''
         try:
             mime_type = FILE_MIME_TYPE["txt"]
@@ -143,145 +142,179 @@ class MhsDriveAccess:
             if f_type and f_type in FILE_MIME_TYPE.keys():
                 mime_type = FILE_MIME_TYPE[f_type]
 
-            file_metadata = {"name":get_filename(filepath), "parents":[parent_id]}
+            file_metadata = {"name":get_filename(filepath), "parents":[pid]}
             media = MediaFileUpload(filepath, mimetype = mime_type, resumable = True)
-            self.lgr.info(F"Sending file '{filepath}' to Drive://{parent_id}/")
-            file = self.fserv.create(body = file_metadata, media_body = media, fields = "id").execute()
+            self._lgr.info(f"Sending file '{filepath}' to Drive://{parent}/")
+            file = self.service.create(body = file_metadata, media_body = media, fields = "id").execute()
             response = file.get("id")
-            self.lgr.info(F"Success: Google Id = {response}")
+            self._lgr.info(f"Success: Google Id = {response}")
         except Exception as sfex:
-            self.lgr.exception(sfex)
+            self._lgr.exception(sfex)
             response = repr(sfex)
 
         return response
 
+    # TODO: Google usually does NOT store files with the proper mime type
     def read_file_info(self, p_mimetype:str = FILE_MIME_TYPE["txt"], p_numitems:int = DEFAULT_NUM_FILES):
-        """READ file data from my Google drive."""
-        self.lgr.debug(get_current_time())
-        if not self.fserv:
-            self.lgr.exception("No Session started!")
+        """Read file info from my Google drive."""
+        if not self.service:
+            self._lgr.warning("No Session!")
             return
         try:
-            results = self.fserv.list( q = F"mimeType='{p_mimetype}'", spaces = "drive",  pageSize = p_numitems,
-                                       fields = "files(name, id, parents, mimeType)" ).execute()
+            results = self.service.list(q = f"mimeType='{p_mimetype}'", spaces = "drive", pageSize = p_numitems,
+                                        fields = "files(name, id, parents, mimeType)").execute()
             items = results.get("files", [])
             if not items:
-                self.lgr.error("No files found?!")
+                self._lgr.warning("No files found?!")
             else:
-                self.lgr.info(F"{len(items)} {p_mimetype} files retrieved:")
-                self.lgr.info(" Name\t\t\t<type>\t\t\t(Id)\t\t\t[parent id]")
+                show(f"Files retrieved: \n Name\t\t\t\t<type>\t\t\t\t(Id)\t\t\t\t[parent id]")
                 for item in items:
                     # items 'shared with me' are in my Drive but without a parent
-                    self.lgr.info(F"{item['name']} <{item['mimeType']}> ({item['id']}) "
-                                   F"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
+                    show(f"{item['name']} <{item['mimeType']}> ({item['id']}) {item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
+                show(f"{len(items)} files retrieved.")
+            if save_option and items:
+                save_to_json(get_base_filename(argv[0]), items)
         except Exception as rfex:
-            self.lgr.exception(rfex)
+            self._lgr.exception(rfex)
 
     def find_all_folders(self):
-        """FIND all the folders on my drive."""
-        self.lgr.debug(get_current_time())
-        if not self.fserv:
-            self.lgr.exception("No Session started!")
+        """Find ALL the folders on my Google drive."""
+        if not self.service:
+            self._lgr.warning("No Session!")
             return
         try:
             page_token = None
-            self.lgr.info("Folders:")
-            self.lgr.info(" Name\t\t(Id)\t\t\t[parent id]")
             mime_type = FILE_MIME_TYPE["gfldr"]
+            all_items = []
+            show("Folders:")
             while True:
-                response = self.fserv.list( q = F"mimeType='{mime_type}'",  spaces = "drive", fields = "nextPageToken, files(id, name, parents)",
-                                            pageToken = page_token ).execute()
-                for item in response.get("files", []):
-                    self.lgr.info(F" {item.get('name')} ({item.get('id')}) {item.get('parents')}")
-                page_token = response.get("nextPageToken", None)
-                if page_token is None:
+                results = self.service.list( q = f"mimeType='{mime_type}'", spaces = "drive", fields = "nextPageToken, files(id, name, parents)",
+                                             pageToken = page_token ).execute()
+                self._lgr.debug(f"type(results) = {type(results)}")
+                items = results.get("files", [])
+                all_items = all_items + items if all_items else items
+                self._lgr.debug(f"type(items) = {type(items)} \n page_token = {page_token}")
+                show("\n\t Name\t\t\t\t(Id)\t\t\t\t\t\t[parent id]")
+                for it in items:
+                    show(f" {it.get('name')} ({it.get('id')}) {it.get('parents')}")
+                page_token = results.get("nextPageToken", None)
+                if page_token is None or len(all_items) > 100:
                     break
+            show(f"\n Found {len(all_items)} folders.")
+            if save_option and all_items:
+                jfile = save_to_json(get_base_filename(argv[0]), all_items)
+                show(f"Saved results to '{jfile}'.")
         except Exception as ffex:
-            self.lgr.exception(ffex)
+            self._lgr.exception(ffex)
 # END class MhsDriveAccess
 
 
 def prepare_args():
-    arg_parser = ArgumentParser( description = "Send data to or request information from my Google Drive", prog = "python3.9 driveAccess.py" )
+    arg_parser = ArgumentParser( description = "Send data to OR request information from my Google Drive.",
+                                 prog = f"python3 {get_filename(argv[0])}" )
+    arg_parser.add_argument('-j', '--jsonsave', action="store_true", default=False,
+                            help="Write the results to a JSON file")
+    arg_parser.add_argument("-l", "--log_location", metavar = "PATHNAME",
+                            help = f"path to a local folder where logs will be saved")
     # one argument required
     req_group = arg_parser.add_argument_group("ONE argument REQUIRED")
     mex_group = req_group.add_mutually_exclusive_group(required=True)
-    mex_group.add_argument(F"--{FOLDERS_LABEL}", action = "store_true", help = "Get information on ALL my Google drive FOLDERS")
-    mex_group.add_argument("-s", "--send", metavar = "PATHNAME",
-                                help = F"path{osp.sep}name of a local file|folder to SEND to Google drive")
-    mex_group.add_argument(F"--{GATHER_LABEL}", action = "store_true", help = "Get information on certain Google drive FILES")
-    # optional arguments
-    arg_parser.add_argument("-l", "--log_location", metavar = "PATHNAME",
-                                help = F"path{osp.sep}name of a local folder where logs will be saved")
+    mex_group.add_argument('-f', f"--{FOLDERS_LABEL}", action = "store_true",
+                           help = "Get information on ALL my Google drive FOLDERS")
+    mex_group.add_argument('-g', f"--{GET_FILES_LABEL}", action = "store_true",
+                           help = "Get information on certain Google drive FILES")
+    mex_group.add_argument('-s', '--send', metavar = "PATHNAME",
+                           help = "path to a local file|folder to SEND to Google drive")
     # send options
     send_group = arg_parser.add_argument_group("Send options")
-    send_group.add_argument("-p", "--parent", default = "root", help = "name of the Drive parent folder to send to")
-    # gather options
-    gather_group = arg_parser.add_argument_group("Gather options")
-    gather_group.add_argument("-t", "--type", default = "txt", help = F"type of files to gather info on:\n\t{repr(FILE_MIME_TYPE)}")
-    gather_group.add_argument("-n", "--numfiles", type = int, default = DEFAULT_NUM_FILES, metavar = "NUM",
-                                help = F"number of files to gather info on (max = {MAX_NUM_FILES})")
+    send_group.add_argument('-p', '--parent', default = "root",
+                            help = "name of the Drive parent folder to send to; DEFAULT = 'root'")
+    # get files options
+    gather_group = arg_parser.add_argument_group("Get files options")
+    gather_group.add_argument('-t', '--type', default = "txt",
+                              help = f"type of files to gather info on:\n\t{repr(FILE_MIME_TYPE)}")
+    gather_group.add_argument('-n', '--numfiles', type = int, default = DEFAULT_NUM_FILES, metavar = "NUM",
+                              help = f"number of files to gather info on (DEFAULT = {DEFAULT_NUM_FILES}, MAX = {MAX_NUM_FILES})")
     return arg_parser
 
 def process_input_parameters(argx:list):
     args = prepare_args().parse_args(argx)
 
+    parent_id = FOLDER_IDS["Test"]
     if args.send:
         if not osp.isdir(args.send) and not osp.isfile(args.send):
-            raise Exception(F"File path '{args.send}' does NOT exist! Exiting...")
+            raise Exception(f"File path '{args.send}' does NOT exist! Exiting...")
         if args.parent not in FOLDER_IDS.keys():
-            raise Exception(F"Parent folder '{args.parent}' does NOT exist! Exiting...")
-    parent_id = FOLDER_IDS[args.parent]
+            raise Exception(f"Parent folder '{args.parent}' does NOT exist! Exiting...")
+        parent_id = FOLDER_IDS[args.parent]
+        print(f"Send to Google drive folder '{args.parent}'.")
 
-    numfiles = 0
-    if args.gather:
+    num_files = 0
+    mime_type = 'x'
+    if args.getfiles:
         if args.type not in FILE_MIME_TYPE.keys():
-            raise Exception(F"file type '{args.type}' does NOT exist! Exiting...")
-        numfiles = DEFAULT_NUM_FILES if args.numfiles <= 0 or args.numfiles > MAX_NUM_FILES else args.numfiles
-    mime_type = FILE_MIME_TYPE[args.type]
+            raise Exception(f"file type '{args.type}' does NOT exist! Exiting...")
+        num_files = DEFAULT_NUM_FILES if args.numfiles <= 0 or args.numfiles > MAX_NUM_FILES else args.numfiles
+        mime_type = FILE_MIME_TYPE[args.type]
+        print(f"Get {num_files} '{mime_type}' files.")
 
-    choice = FOLDERS_LABEL if args.folders else GATHER_LABEL if args.gather else args.send
-    return choice, parent_id, mime_type, numfiles, args.log_location if args.log_location else DEFAULT_LOG_FOLDER
+    choic = FOLDERS_LABEL if args.folders else GET_FILES_LABEL if args.getfiles else args.send
+    print(f"choice = '{choic}'.")
 
-def main_drive(argl:list):
-    start_time = dt.now()
-    choice, parent_id, mimetype, numfiles, logloc = process_input_parameters(argl)
-    parent = list( FOLDER_IDS.keys() )[ list(FOLDER_IDS.values()).index(parent_id) ]
+    return args.jsonsave, choic, parent_id, mime_type, num_files, args.log_location if args.log_location else DEFAULT_LOG_FOLDER
 
-    log_control = MhsLogger(base_run_file, con_level = DEFAULT_LOG_LEVEL, folder = logloc)
-    lgr = log_control.get_logger()
-    lgr.debug( repr(lgr.handlers) )
-    lgr.info(F"Start time = {start_time.strftime(RUN_DATETIME_FORMAT)}")
-
-    mhsda = MhsDriveAccess(lgr)
-    try:
-        mhsda.begin_session()
-        if choice == FOLDERS_LABEL:
-            lgr.info(F"find all my {FOLDERS_LABEL}:")
-            mhsda.find_all_folders()
-        # gather info
-        elif choice == GATHER_LABEL:
-            lgr.info(F"read info from {numfiles} random {mimetype} files:")
-            mhsda.read_file_info(mimetype, numfiles)
+def main_drive():
+    mhsda.begin_session()
+    if choice == FOLDERS_LABEL:
+        show(f"find all my {FOLDERS_LABEL}:")
+        mhsda.find_all_folders()
+    # get file info
+    elif choice == GET_FILES_LABEL:
+        show(f"read info from {numfiles} random {mimetype} files:")
+        mhsda.read_file_info(mimetype, numfiles)
+    else:
+        if osp.isdir(choice):
+            show(f"upload all files in folder '{choice}' to Drive folder: {parent}")
+            mhsda.send_folder(choice)
         else:
-            if osp.isdir(choice):
-                lgr.info(F"upload all files in folder '{choice}' to Drive folder: {parent}")
-                mhsda.send_folder(choice, parent_id)
-            else:
-                lgr.info(F"upload file '{choice}' to Drive folder: {parent}")
-                mhsda.send_file(choice, parent_id)
-    except Exception as mdex:
-        lgr.exception(mdex)
-        return 66
+            show(f"upload file '{choice}' to Drive folder: {parent}")
+            mhsda.send_file(choice)
+
+
+if __name__ == "__main__":
+    start_time = dt.now()
+    save_option, choice, pid, mimetype, numfiles, logloc = process_input_parameters(argv[1:])
+    log_control = MhsLogger(get_base_filename(__file__), folder = logloc)
+    lgr = log_control.get_logger()
+    show = log_control.show
+    show(f"save option = {save_option}, choice = {choice}, log location = {logloc}")
+
+    mhsda = None
+    code = 0
+    try:
+        parent = list(FOLDER_IDS.keys())[list(FOLDER_IDS.values()).index(pid)]
+        show(f"parent folder = {parent}")
+        show(f"Start time = {start_time.strftime(RUN_DATETIME_FORMAT)}")
+
+        mhsda = MhsDriveAccess(lgr)
+        main_drive()
+    except KeyboardInterrupt:
+        show(">> User interruption.")
+        code = 13
+    except ValueError:
+        show(">> Value error.")
+        code = 39
+    except HttpError:
+        show(">> Http error.")
+        code = 53
+    except Exception as mex:
+        show(f"Problem: {repr(mex)}.")
+        code = 66
     finally:
         if mhsda:
             mhsda.end_session()
 
-    end_time = dt.now()
-    lgr.info(F"Finish time = {end_time.strftime(RUN_DATETIME_FORMAT)}")
-    run_time = (end_time - start_time).total_seconds()
-    print(F"\nRunning time = {(run_time // 60)} minutes, {(run_time % 60):2.4} seconds\n")
+    run_time = (dt.now() - start_time).total_seconds()
+    show(f"\nRunning time = {(run_time // 60)} minutes, {(run_time % 60):2.4} seconds\n")
 
-
-if __name__ == "__main__":
-    exit( main_drive(argv[1:]) )
+    exit(code)

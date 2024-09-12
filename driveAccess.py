@@ -13,8 +13,9 @@ __python_version__ = "3.6+"
 __google_api_python_client_version__ = "2.144.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2021-05-14"
-__updated__ = "2024-09-11"
+__updated__ = "2024-09-12"
 
+import logging
 from sys import argv, path
 import os
 import glob
@@ -89,17 +90,17 @@ def get_credentials():
 
 class MhsDriveAccess:
     """Start a locked session, read/write to my google drive, end the session."""
-    def __init__(self, p_logger:MhsLogger = None):
+    def __init__(self, p_logger:logging.Logger = None):
         self._lgr = p_logger if p_logger else get_simple_logger(self.__class__.__name__)
         # prevent different instances/threads from writing at the same time
         self._lock = threading.Lock()
-        self._lgr.info(f"Launch {self.__class__.__name__} instance with lock = {self._lock.__str__()} at {get_current_time()}")
+        self._lgr.info(f"Launch '{self.__class__.__name__}' instance at: {get_current_time()}")
         self.service = None
 
     def begin_session(self):
         """Activate a UNIQUE session to the drive."""
         self._lock.acquire()
-        self._lgr.info(f"acquired Drive lock at {get_current_time()}")
+        self._lgr.info(f"acquired Drive lock at: {get_current_time()}")
         creds = get_credentials()
         service = build("drive", "v3", credentials = creds)
         self.service = service.files()
@@ -107,9 +108,9 @@ class MhsDriveAccess:
     def end_session(self):
         """RELEASE this drive session."""
         self.service = None
-        if self._lock.locked():
+        if self._lock and self._lock.locked():
             self._lock.release()
-            self._lgr.info(f"released Drive lock at {get_current_time()}")
+            self._lgr.info(f"released Drive lock at: {get_current_time()}")
 
     def send_folder(self, fpath:str, wildcard:str = '*'):
         """SEND the files in a folder to my Google drive."""
@@ -173,13 +174,14 @@ class MhsDriveAccess:
             if not items:
                 self._lgr.warning("No files found?!")
             else:
-                self._lgr.info(f"Files retrieved: \n Name\t\t\t\t<type>\t\t\t\t(Id)\t\t\t\t[parent id]")
+                self._lgr.info(f"Files retrieved: \n\t\t\t\t\t\t\t\t Name \t\t\t\t <type> \t\t\t\t (Id) \t\t\t\t\t [parent id]")
                 for item in items:
                     # items 'shared with me' are in my Drive but without a parent
                     self._lgr.info(f"{item['name']} <{item['mimeType']}> ({item['id']}) {item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
                 self._lgr.info(f">> {len(items)} files retrieved.\n")
             if save_option and items:
-                save_to_json(get_base_filename(argv[0]), items)
+                jfile = save_to_json(get_base_filename(argv[0]), items)
+                self._lgr.info(f"Saved results to '{jfile}'.")
         except Exception as rfex:
             self._lgr.exception(rfex)
             raise rfex
@@ -258,9 +260,9 @@ def process_input_parameters(argx:list):
     parent_id = FOLDER_IDS["Test"]
     if args.send:
         if not osp.isdir(args.send) and not osp.isfile(args.send):
-            raise Exception(f"File path '{args.send}' does NOT exist! Exiting...")
+            raise Exception(f"File path '{args.send}' NOT valid! Exiting...")
         if args.parent not in FOLDER_IDS.keys():
-            raise Exception(f"Parent folder '{args.parent}' does NOT exist! Exiting...")
+            raise Exception(f"Parent folder '{args.parent}' NOT recognized! Exiting...")
         parent_id = FOLDER_IDS[args.parent]
         print(f"Send to Google drive folder '{args.parent}'.")
 
@@ -276,7 +278,8 @@ def process_input_parameters(argx:list):
     choic = FOLDERS_LABEL if args.folders else GET_FILES_LABEL if args.getfiles else METADATA_LABEL if args.metadata else args.send
     print(f"choice = '{choic}'.")
 
-    return args.jsonsave, choic, parent_id, mime_type, num_files, args.id_of_file, args.log_location if args.log_location else DEFAULT_LOG_FOLDER
+    return ( args.jsonsave, choic, args.parent, parent_id, mime_type, num_files, args.id_of_file,
+             args.log_location if args.log_location else DEFAULT_LOG_FOLDER )
 
 def main_drive():
     mhsda.begin_session()
@@ -304,17 +307,17 @@ def main_drive():
 
 if __name__ == "__main__":
     start_time = dt.now()
-    save_option, choice, pid, mimetype, numfiles, meta_id, logloc = process_input_parameters(argv[1:])
-    lgr = MhsLogger(get_base_filename(__file__), con_level = DEFAULT_LOG_LEVEL, folder = logloc)
-    lgr.info(f"save option = {save_option}, choice = {choice}, log location = {logloc}")
+    save_option, choice, parent, pid, mimetype, numfiles, meta_id, logloc = process_input_parameters(argv[1:])
+    log_control = MhsLogger(get_base_filename(__file__), con_level = DEFAULT_LOG_LEVEL, folder = logloc)
+    lgr = log_control.get_logger()
+    lgr.info(f"save option = {save_option}, choice = '{choice}', log location = ./{logloc}")
 
     mhsda = None
     code = 0
     try:
-        parent = list(FOLDER_IDS.keys())[list(FOLDER_IDS.values()).index(pid)]
-        lgr.info(f"parent folder = {parent}")
+        # parent = list(FOLDER_IDS.keys())[list(FOLDER_IDS.values()).index(pid)]
+        # lgr.info(f"parent folder = {parent}")
         lgr.info(f"Start time = {start_time.strftime(RUN_DATETIME_FORMAT)}")
-
         mhsda = MhsDriveAccess(lgr)
         main_drive()
     except KeyboardInterrupt:

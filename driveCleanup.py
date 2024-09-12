@@ -21,6 +21,7 @@ from driveAccess import *
 DEFAULT_DATE = "2027-09-13"
 DEFAULT_FILETYPE = "gcm"
 DEFAULT_PARENT_FOLDER = "Test"
+MAX_FILES_DELETE = 500
 
 # see https://github.com/googleapis/google-api-python-client/issues/299
 lg.getLogger("googleapiclient.discovery_cache").setLevel(lg.ERROR)
@@ -30,14 +31,15 @@ def get_files():
     """retrieve files in the specified parent folder that are older than the specified date"""
     query = f"modifiedTime < '{fdate}' and '{parent_id}' in parents"
     lgr.info(f"query = '{query}'")
-    results = mhsda.service.list(q = query, spaces = "drive", fields = "files(name, id, parents, mimeType, modifiedTime)").execute()
+    results = mhsda.service.list(q = query, spaces = "drive", pageSize = MAX_FILES_DELETE,
+                                 fields = "files(name, id, parents, mimeType, modifiedTime)").execute()
     items = results.get("files", [])
     if items:
-        lgr.info(f"Files retrieved: \n\t\t\t\t\t\t\t\t Name \t\t\t\t <type> \t\t\t\t %Timestamp% \t\t\t\t (Id) \t\t\t\t\t [parent id]")
+        lgr.debug(f"Files retrieved: \n\t\t\t\t\t\t\t\t Name \t\t\t\t <type> \t\t\t\t %Timestamp% \t\t\t\t (Id) \t\t\t\t\t [parent id]")
         for item in items:
-            # items 'shared with me' are in my Drive but WITHOUT a parent
-            lgr.info(f"{item['name']} <{item['mimeType']}> %{item['modifiedTime']}% ({item['id']}) "
-                     f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
+            # n.b. items 'shared with me' are in my Drive but WITHOUT a parent
+            lgr.debug(f"{item['name']} <{item['mimeType']}> %{item['modifiedTime']}% ({item['id']}) "
+                      f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
         lgr.info(f">> found {len(items)} files.\n")
     else:
         lgr.warning("No files found?!")
@@ -50,10 +52,13 @@ def delete_file(p_name, p_file_id):
     :arg    p_file_id: ID of the file to delete
     """
     if testing_mode:
-        lgr.info(f"Testing: Would have deleted file '{p_name}' with id: {p_file_id}")
+        response = f"Testing: Would have deleted file '{p_name}' with id: {p_file_id}"
+        lgr.info(response)
     else:
         response = mhsda.service.delete(fileId = 'file_id').execute()
         lgr.info(f"response[{p_file_id}] = '{response}'.")
+
+    return response
 
 def set_args():
     arg_parser = ArgumentParser( description = "Delete the specified files on my Google Drive",
@@ -97,8 +102,8 @@ def run():
             fname = item["name"]
             ftype = get_filetype(fname)[1:]
             if ftype == filetype:
-                delete_file(fname, item["id"])
-                deletes.append(f"{parent_folder}/{fname}")
+                result = delete_file(fname, item["id"])
+                deletes.append(result)
         if save_option and deletes:
             jfile = save_to_json(get_base_filename(argv[0]), deletes)
             lgr.info(f"Saved results to '{jfile}'.")
@@ -111,7 +116,8 @@ def run():
 
 if __name__ == "__main__":
     start_time = dt.now()
-    lgr = MhsLogger(get_base_filename(argv[0]), con_level = DEFAULT_LOG_LEVEL)
+    log_control = MhsLogger(get_base_filename(argv[0]), con_level = DEFAULT_LOG_LEVEL)
+    lgr = log_control.get_logger()
     code = 0
     try:
         save_option, testing_mode, fdate, filetype, parent_folder, parent_id = get_args(argv[1:])

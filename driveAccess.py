@@ -307,16 +307,17 @@ def main_drive():
 
 if __name__ == "__main__":
     start_time = dt.now()
-    save_option, choice, parent, pid, mimetype, numfiles, meta_id, logloc = process_input_parameters(argv[1:])
-    log_control = MhsLogger(get_base_filename(__file__), con_level = DEFAULT_LOG_LEVEL, folder = logloc)
-    lgr = log_control.get_logger()
-    lgr.info(f"save option = {save_option}, choice = '{choice}', log location = ./{logloc}")
-
+    try:
+        save_option, choice, parent, pid, mimetype, numfiles, meta_id, logloc = process_input_parameters(argv[1:])
+        log_control = MhsLogger(get_base_filename(__file__), con_level = DEFAULT_LOG_LEVEL, folder = logloc)
+        lgr = log_control.get_logger()
+        lgr.info(f"save option = {save_option}, choice = '{choice}', log location = ./{logloc}")
+    except Exception as lex:
+        print(f">> Logger exception: {repr(lex)}")
+        lgr = get_simple_logger(get_base_filename(__file__))
     mhsda = None
     code = 0
     try:
-        # parent = list(FOLDER_IDS.keys())[list(FOLDER_IDS.values()).index(pid)]
-        # lgr.info(f"parent folder = {parent}")
         lgr.info(f"Start time = {start_time.strftime(RUN_DATETIME_FORMAT)}")
         mhsda = MhsDriveAccess(lgr)
         main_drive()
@@ -324,11 +325,11 @@ if __name__ == "__main__":
         lgr.exception(">> User interruption.")
         code = 13
     except ValueError:
-        lgr.error(">> Value error.")
-        code = 39
+        lgr.exception(">> Value error.")
+        code = 27
     except HttpError:
-        lgr.error(">> Http error.")
-        code = 53
+        lgr.exception(">> Http error.")
+        code = 39
     except Exception as mex:
         lgr.exception(f"Problem: {repr(mex)}.")
         code = 66

@@ -11,10 +11,10 @@
 __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.6+"
-__google_api_python_client_version__ = "2.144.0"
+__google_api_python_client_version__ = "2.147.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2024-09-08"
-__updated__ = "2024-09-19"
+__updated__ = "2024-09-27"
 
 from driveAccess import *
 import re
@@ -40,26 +40,26 @@ def get_files():
             # n.b. items 'shared with me' are in my Drive but WITHOUT a parent
             lgr.debug(f"{item['name']} <{item['mimeType']}> %{item['modifiedTime']}% ({item['id']}) "
                       f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
-        lgr.info(f">> found {len(items)} files.\n")
+        lgr.info(f">> found {len(items)} files older than '{fdate}' in folder '{parent_folder}'.\n")
     else:
         lgr.warning("No files found?!")
 
     return items
 
-def delete_file(p_name:str, p_file_id:str, p_filedate:str):
+def delete_file(p_name:str, p_file_id:str, p_filedate:str) -> str:
     """Delete a file.
     :arg    p_name: name of the file
     :arg    p_file_id: ID of the file to delete
     :arg    p_filedate: modified time of the file
     """
     if testing_mode:
-        response = f"Testing: Would have deleted file '{p_name}' with date: {p_filedate}"
-        lgr.info(response)
+        result = f"Testing: Would have deleted file '{p_name}' with date: {p_filedate}"
     else:
         response = mhsda.service.delete(fileId = p_file_id).execute()
-        lgr.info(f"response[{p_name} @ {p_filedate}] = '{response}'.")
+        result = f"delete response[{p_name} @ {p_filedate}] = '{response}'."
 
-    return response
+    lgr.info(result)
+    return result
 
 def set_args():
     arg_parser = ArgumentParser( description = "Delete the specified files on my Google Drive",
@@ -107,8 +107,7 @@ def run():
             ftype = get_filetype(fname)[1:]
             if ftype == filetype:
                 result = delete_file(fname, item["id"], item["modifiedTime"])
-                if result:
-                    deletes.append(result)
+                deletes.append(result)
         if save_option and deletes:
             jfile = save_to_json(get_base_filename(argv[0]), deletes)
             lgr.info(f"Saved results to '{jfile}'.")
@@ -123,10 +122,10 @@ if __name__ == "__main__":
     start_time = dt.now()
     log_control = MhsLogger(get_base_filename(argv[0]), con_level = DEFAULT_LOG_LEVEL)
     lgr = log_control.get_logger()
+    lgr.info(f"Start time = {start_time.strftime(RUN_DATETIME_FORMAT)}")
     code = 0
     try:
         save_option, testing_mode, fdate, filetype, parent_folder, parent_id = get_args(argv[1:])
-        lgr.info(f"Start time = {start_time.strftime(RUN_DATETIME_FORMAT)}")
         mhsda = MhsDriveAccess(lgr)
         run()
     except KeyboardInterrupt:

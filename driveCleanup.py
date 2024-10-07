@@ -4,20 +4,17 @@
 # driveCleanup.py
 #   -- delete specified files from my Google Drive
 #
-# includes some code from Google quickstart examples
-#
 # Copyright (c) 2024 Mark Sattolo <epistemik@gmail.com>
 
 __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
-__python_version__ = "3.6+"
+__python_version__ = "3.11+"
 __google_api_python_client_version__ = "2.147.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2024-09-08"
-__updated__ = "2024-09-27"
+__updated__ = "2024-10-03"
 
 from driveAccess import *
-import re
 
 DEFAULT_DATE = "2027-11-13"
 DEFAULT_FILETYPE = "gcm"
@@ -26,25 +23,6 @@ MAX_FILES_DELETE = 500
 
 # see https://github.com/googleapis/google-api-python-client/issues/299
 lg.getLogger("googleapiclient.discovery_cache").setLevel(lg.ERROR)
-
-def get_files():
-    """retrieve files in the specified parent folder that are older than the specified date"""
-    query = f"modifiedTime < '{fdate}' and '{parent_id}' in parents"
-    lgr.info(f"query: {query}")
-    results = mhsda.service.list(q = query, spaces = "drive", pageSize = MAX_FILES_DELETE,
-                                 fields = "files(name, id, parents, mimeType, modifiedTime)").execute()
-    items = results.get("files", [])
-    if items:
-        lgr.debug(f"Files retrieved: \n\t\t\t\t\t\t\t\t Name \t\t\t\t <type> \t\t\t\t %Timestamp% \t\t\t\t (Id) \t\t\t\t\t [parent id]")
-        for item in items:
-            # n.b. items 'shared with me' are in my Drive but WITHOUT a parent
-            lgr.debug(f"{item['name']} <{item['mimeType']}> %{item['modifiedTime']}% ({item['id']}) "
-                      f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
-        lgr.info(f">> found {len(items)} files older than '{fdate}' in folder '{parent_folder}'.\n")
-    else:
-        lgr.warning("No files found?!")
-
-    return items
 
 def delete_file(p_name:str, p_file_id:str, p_filedate:str) -> str:
     """Delete a file.
@@ -61,12 +39,54 @@ def delete_file(p_name:str, p_file_id:str, p_filedate:str) -> str:
     lgr.info(result)
     return result
 
+def get_files():
+    """retrieve files in the specified parent folder that are older than the specified date"""
+    # could include 'mimeType=x' in the query but files in Google Drive RARELY have the proper mimetype assigned
+    query = f"modifiedTime < '{fdate}' and '{parent_id}' in parents"
+    lgr.info(f"query: [{query}]")
+    results = mhsda.service.list(q = query, spaces = "drive", pageSize = MAX_FILES_DELETE,
+                                 fields = "files(name, id, parents, mimeType, modifiedTime)").execute()
+    items = results.get("files", [])
+    if items:
+        lgr.debug(f"Files retrieved: \n\t\t\t\t\t\t\t\t Name \t\t\t\t <type> \t\t\t\t %Timestamp% \t\t\t\t (Id) \t\t\t\t\t [parent id]")
+        for item in items:
+            # n.b. items 'shared with me' are in my Drive but WITHOUT a parent
+            lgr.debug(f"{item['name']} <{item['mimeType']}> %{item['modifiedTime']}% ({item['id']}) "
+                      f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
+        lgr.info(f">> found {len(items)} files older than '{fdate}' in folder '{parent_folder}'.\n")
+    else:
+        lgr.warning("No files found?!")
+
+    return items
+
+def run():
+    deletes = []
+    try:
+        mhsda.begin_session()
+        files_to_delete = get_files()
+        for item in files_to_delete:
+            fname = item["name"]
+            # find the file type by using the filename extension
+            ftype = get_filetype(fname)[1:]
+            if ftype == filetype:
+                result = delete_file(fname, item["id"], item["modifiedTime"])
+                deletes.append(result)
+        if save_option and deletes:
+            jfile = save_to_json(get_base_filename(argv[0]), deletes)
+            lgr.info(f"Saved results to '{jfile}'.")
+    except Exception as rex:
+        raise rex
+    finally:
+        if mhsda:
+            mhsda.end_session()
+
 def set_args():
     arg_parser = ArgumentParser( description = "Delete the specified files on my Google Drive",
                                  prog = f"python3 {get_filename(argv[0])}" )
 
     arg_parser.add_argument('-s', '--save', action="store_true", default=False, help="Write the response to a JSON file")
-    arg_parser.add_argument('-t', '--test', action="store_true", default=False, help="Testing mode; DEFAULT = False")
+    arg_parser.add_argument('-t', '--test', action="store_true", default=False,
+                            help="Testing mode: NO deletions done; DEFAULT = False")
     arg_parser.add_argument('-f', '--filetype', type=str, default=f"{DEFAULT_FILETYPE}",
                             help = f"filename extension of files to delete; DEFAULT = '{DEFAULT_FILETYPE}'")
     arg_parser.add_argument('-d', '--date', type=str, default=DEFAULT_DATE,
@@ -86,36 +106,12 @@ def get_args(argl:list):
     parid = FOLDER_IDS[args.parent]
     lgr.info(f"DELETING files in folder {args.parent}; id = {parid}")
 
-    adt = args.date
-    # will reject most improper dates
-    dtre = re.compile("[1-2][0-9]{3}-[0-1][0-9]-[0-3][0-9]")
-    dtmatch = re.match(dtre, adt)
-    if not dtmatch:
-        raise Exception(f"Date '{adt}' in IMPROPER format.")
-    ts = f"{adt}T01:02:03"
+    # will throw an EXCEPTION if date is NOT VALID
+    dt.strptime(args.date, CELL_DATE_STR)
+    ts = f"{args.date}T01:02:03"
     lgr.info(f"DELETING files OLDER than: {ts}\n")
 
     return args.save, args.test, ts, args.filetype, args.parent, parid
-
-def run():
-    deletes = []
-    try:
-        mhsda.begin_session()
-        files_to_delete = get_files()
-        for item in files_to_delete:
-            fname = item["name"]
-            ftype = get_filetype(fname)[1:]
-            if ftype == filetype:
-                result = delete_file(fname, item["id"], item["modifiedTime"])
-                deletes.append(result)
-        if save_option and deletes:
-            jfile = save_to_json(get_base_filename(argv[0]), deletes)
-            lgr.info(f"Saved results to '{jfile}'.")
-    except Exception as rex:
-        raise rex
-    finally:
-        if mhsda:
-            mhsda.end_session()
 
 
 if __name__ == "__main__":
@@ -128,20 +124,20 @@ if __name__ == "__main__":
         save_option, testing_mode, fdate, filetype, parent_folder, parent_id = get_args(argv[1:])
         mhsda = MhsDriveAccess(lgr)
         run()
-    except KeyboardInterrupt:
-        lgr.exception(">> User interruption.")
+    except KeyboardInterrupt as mki:
+        lgr.exception(mki)
         code = 13
-    except ValueError:
-        lgr.exception(">> Value error.")
+    except ValueError as mve:
+        lgr.exception(mve)
         code = 27
-    except HttpError:
-        lgr.exception(">> googleapiclient Http error.")
+    except HttpError as mhe:
+        lgr.exception(mhe)
         code = 39
     except Exception as mex:
-        lgr.exception(f"Problem: {repr(mex)}.")
+        lgr.exception(mex)
         code = 66
 
     run_time = (dt.now() - start_time).total_seconds()
-    lgr.info(f"\nRunning time = {(run_time // 60)} minutes, {(run_time % 60):2.4} seconds\n")
+    lgr.info(f"Running time = {(run_time // 60)} minutes, {(run_time % 60):2.4} seconds\n")
 
     exit(code)

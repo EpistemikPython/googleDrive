@@ -9,10 +9,10 @@
 __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.11+"
-__google_api_python_client_version__ = "2.147.0"
+__google_api_python_client_version__ = "2.149.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2024-09-08"
-__updated__ = "2024-10-03"
+__updated__ = "2024-10-11"
 
 from driveAccess import *
 
@@ -41,7 +41,7 @@ def delete_file(p_name:str, p_file_id:str, p_filedate:str) -> str:
 
 def get_files():
     """retrieve files in the specified parent folder that are older than the specified date"""
-    # could include 'mimeType=x' in the query but files in Google Drive RARELY have the proper mimetype assigned
+    # could include 'mimeType=x' in the query but some file types in Google Drive RARELY have the proper mimetype assigned
     query = f"modifiedTime < '{fdate}' and '{parent_id}' in parents"
     lgr.info(f"query: [{query}]")
     results = mhsda.service.list(q = query, spaces = "drive", pageSize = MAX_FILES_DELETE,

@@ -9,11 +9,11 @@
 
 __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
-__python_version__ = "3.6+"
-__google_api_python_client_version__ = "2.144.0"
+__python_version__ = "3.9+"
+__google_api_python_client_version__ = "2.149.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2021-05-14"
-__updated__ = "2024-09-12"
+__updated__ = "2024-10-11"
 
 import logging
 from sys import argv, path
@@ -44,7 +44,7 @@ DRIVE_TOKEN_PATH:str    = osp.join(SECRETS_DIR, JSON_TOKEN)
 DRIVE_ACCESS_SCOPE:list = ["https://www.googleapis.com/auth/drive"]
 
 DEFAULT_NUM_FILES = 32
-MAX_NUM_FILES     = 256
+MAX_NUM_FILES     = 500
 MAX_NUM_FOLDERS   = 800
 FILE_MIME_TYPE = {
     "txt"     : "text/plain" ,
@@ -126,7 +126,7 @@ class MhsDriveAccess:
                     self.send_file(item)
                     num_sent += 1
         except Exception as sfdex:
-            self._lgr.exception(sfdex)
+            # self._lgr.exception(sfdex)
             raise sfdex
 
         self._lgr.info(f"Sent {num_sent} files to folder '{parent}'.")
@@ -150,7 +150,7 @@ class MhsDriveAccess:
             response = file.get("id")
             self._lgr.info(f"Success: Google Id = {response}")
         except Exception as sfex:
-            self._lgr.exception(sfex)
+            # self._lgr.exception(sfex)
             raise sfex
 
         return response
@@ -174,7 +174,7 @@ class MhsDriveAccess:
             if not items:
                 self._lgr.warning("No files found?!")
             else:
-                self._lgr.info(f"Files retrieved: \n\t\t\t\t\t\t\t\t Name \t\t\t\t <type> \t\t\t\t (Id) \t\t\t\t\t [parent id]")
+                self._lgr.info(f"Files retrieved: \n\t\t\t\t\t\t\t\t Name \t\t\t\t\t\t <type> \t\t\t\t\t\t (Id) \t\t\t\t\t\t\t [parent id]")
                 for item in items:
                     # items 'shared with me' are in my Drive but without a parent
                     self._lgr.info(f"{item['name']} <{item['mimeType']}> ({item['id']}) {item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
@@ -183,7 +183,7 @@ class MhsDriveAccess:
                 jfile = save_to_json(get_base_filename(argv[0]), items)
                 self._lgr.info(f"Saved results to '{jfile}'.")
         except Exception as rfex:
-            self._lgr.exception(rfex)
+            # self._lgr.exception(rfex)
             raise rfex
 
     def find_all_folders(self):
@@ -197,7 +197,8 @@ class MhsDriveAccess:
             all_items = []
             self._lgr.info("Folders:")
             while True:
-                results = self.service.list( q = f"mimeType='{mime_type}'", spaces = "drive", fields = "nextPageToken, files(id, name, parents)",
+                results = self.service.list( q = f"mimeType='{mime_type}'", spaces = "drive",
+                                             fields = "nextPageToken, files(id, name, parents)",
                                              pageToken = page_token ).execute()
                 self._lgr.debug(f"type(results) = {type(results)}")
                 items = results.get("files", [])
@@ -214,10 +215,33 @@ class MhsDriveAccess:
                 jfile = save_to_json(get_base_filename(argv[0]), all_items)
                 self._lgr.info(f"Saved results to '{jfile}'.")
         except Exception as ffex:
-            self._lgr.exception(ffex)
+            # self._lgr.exception(ffex)
             raise ffex
 # END class MhsDriveAccess
 
+
+def main_drive():
+    mhsda.begin_session()
+    # list all folders
+    if choice == FOLDERS_LABEL:
+        lgr.info(f"find all my {FOLDERS_LABEL}:")
+        mhsda.find_all_folders()
+    # get files
+    elif choice == GET_FILES_LABEL:
+        lgr.info(f"read info from {numfiles} random {mimetype} files:")
+        mhsda.read_file_info(mimetype, numfiles)
+    # get file metadata
+    elif choice == "metadata":
+        lgr.info("get metadata for a file.")
+        mhsda.get_file_metadata("Budget-qtrly.gsht", meta_id)
+    # send all files in a folder
+    elif osp.isdir(choice):
+        lgr.info(f"upload all files in folder '{choice}' to Drive folder: {parent}")
+        mhsda.send_folder(choice)
+    # send a file
+    else:
+        lgr.info(f"upload file '{choice}' to Drive folder: {parent}")
+        mhsda.send_file(choice)
 
 def prepare_args():
     arg_parser = ArgumentParser( description = "Send data to OR request information from my Google Drive.",
@@ -281,29 +305,6 @@ def process_input_parameters(argx:list):
     return ( args.jsonsave, choic, args.parent, parent_id, mime_type, num_files, args.id_of_file,
              args.log_location if args.log_location else DEFAULT_LOG_FOLDER )
 
-def main_drive():
-    mhsda.begin_session()
-    # list all folders
-    if choice == FOLDERS_LABEL:
-        lgr.info(f"find all my {FOLDERS_LABEL}:")
-        mhsda.find_all_folders()
-    # get files
-    elif choice == GET_FILES_LABEL:
-        lgr.info(f"read info from {numfiles} random {mimetype} files:")
-        mhsda.read_file_info(mimetype, numfiles)
-    # get file metadata
-    elif choice == "metadata":
-        lgr.info("get metadata for a file.")
-        mhsda.get_file_metadata("Budget-qtrly.gsht", meta_id)
-    # send all files in a folder
-    elif osp.isdir(choice):
-        lgr.info(f"upload all files in folder '{choice}' to Drive folder: {parent}")
-        mhsda.send_folder(choice)
-    # send a file
-    else:
-        lgr.info(f"upload file '{choice}' to Drive folder: {parent}")
-        mhsda.send_file(choice)
-
 
 if __name__ == "__main__":
     start_time = dt.now()
@@ -311,9 +312,9 @@ if __name__ == "__main__":
         save_option, choice, parent, pid, mimetype, numfiles, meta_id, logloc = process_input_parameters(argv[1:])
         log_control = MhsLogger(get_base_filename(__file__), con_level = DEFAULT_LOG_LEVEL, folder = logloc)
         lgr = log_control.get_logger()
-        lgr.info(f"save option = {save_option}, choice = '{choice}', log location = ./{logloc}")
+        lgr.info(f"save option = {save_option}, choice = '{choice}', log location = {logloc}")
     except Exception as lex:
-        print(f">> Logger exception: {repr(lex)}")
+        print(f">>Problem: {repr(lex)}")
         lgr = get_simple_logger(get_base_filename(__file__))
     mhsda = None
     code = 0
@@ -321,17 +322,17 @@ if __name__ == "__main__":
         lgr.info(f"Start time = {start_time.strftime(RUN_DATETIME_FORMAT)}")
         mhsda = MhsDriveAccess(lgr)
         main_drive()
-    except KeyboardInterrupt:
-        lgr.exception(">> User interruption.")
+    except KeyboardInterrupt as mki:
+        lgr.exception(mki)
         code = 13
-    except ValueError:
-        lgr.exception(">> Value error.")
+    except ValueError as mve:
+        lgr.exception(mve)
         code = 27
-    except HttpError:
-        lgr.exception(">> Http error.")
+    except HttpError as mghe:
+        lgr.exception(mghe)
         code = 39
     except Exception as mex:
-        lgr.exception(f"Problem: {repr(mex)}.")
+        lgr.exception(mex)
         code = 66
     finally:
         if mhsda:

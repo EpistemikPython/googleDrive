@@ -9,28 +9,28 @@
 __author_name__    = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.10+"
+__pyQt_version__   = "6.8"
 __created__ = "2024-10-11"
-__updated__ = "2024-10-11"
+__updated__ = "2024-10-12"
 
 from sys import path
 from PySide6.QtWidgets import (QApplication, QComboBox, QVBoxLayout, QGroupBox, QDialog, QFileDialog, QLabel, QCheckBox,
                                QPushButton, QFormLayout, QDialogButtonBox, QTextEdit, QInputDialog, QMessageBox)
+from PySide6.QtCore import Qt
 from functools import partial
 path.append("/home/marksa/git/Python/utils")
-from driveCleanup import *
+from driveFunctions import *
 
-TIMEFRAME:str = "Time Frame"
-UPDATE_DOMAINS = [CURRENT_YRS, RECENT_YRS, MID_YRS, EARLY_YRS, ALL_YEARS] + [year for year in UPDATE_YEARS]
-UPDATE_FXNS = [update_rev_exps_main, update_assets_main, update_balance_main]
-FXNS_TABLE = {
-    BAL+' & '+ASSET+'s' : UPDATE_FXNS[1:] ,
-    ALL                 : UPDATE_FXNS ,
-    BAL                 : UPDATE_FXNS[2] ,
-    ASSET+'s'           : UPDATE_FXNS[1] ,
-    "Rev & Exps"        : UPDATE_FXNS[0]
-}
 UI_DEFAULT_LOG_LEVEL:int = logging.INFO
-
+BASE_GNUCASH_FOLDER:str = "/home/marksa/dev/Gnucash"
+FILE_LABEL:str   = "File"
+FOLDER_LABEL:str = "Folder"
+SEND_LABEL:str   = " to send:"
+LOG_LABEL:str    = "Change the logging level?"
+ROOT_LABEL:str   = "root"
+NO_NEED:str      = "NOT NEEDED"
+FUNCTIONS = ["Get all Drive Folders", "Get Drive files", "Send local folder",
+             "Send local files", "Get file metadata", "Delete Drive files"]
 
 # noinspection PyAttributeOutsideInit
 class AccessDriveUI(QDialog):
@@ -73,28 +73,39 @@ class AccessDriveUI(QDialog):
         self.setLayout(qvb_layout)
 
     def create_group_box(self):
-        self.gb_main = QGroupBox("Parameters:")
+        self.gb_main = QGroupBox("Parameters")
         layout = QFormLayout()
 
-        self.cb_script = QComboBox()
-        self.cb_script.addItems([SCRIPT_LABEL])
-        layout.addRow(QLabel("Script:"), self.cb_script)
+        self.cb_fxn = QComboBox()
+        self.cb_fxn.addItems(FUNCTIONS)
+        self.cb_fxn.currentIndexChanged.connect(self.fxn_change)
+        layout.addRow(QLabel("Function to run:"), self.cb_fxn)
 
-        self.add_mon_file_btn()
-        layout.addRow(self.mon_label, self.mon_file_btn)
+        self.add_file_btn()
+        layout.addRow(self.file_label, self.file_btn)
+
+        self.add_folder_btn()
+        layout.addRow(self.folder_label, self.folder_btn)
+
+        self.pb_drive_folder = QPushButton("Select the Drive folder to use.")
+        self.drive_folder = ROOT_LABEL
+        self.pb_drive_folder.clicked.connect(self.get_drive_folder)
+        layout.addRow(QLabel("Drive folder:"), self.pb_drive_folder)
+
+        self.pb_meta_filename = QPushButton("Select the Drive file name to query for metadata.")
+        self.meta_filename = DEFAULT_METADATA_FILE
+        self.pb_drive_folder.clicked.connect(self.get_meta_filename)
+        layout.addRow(QLabel("File to query for metadata:"), self.pb_meta_filename)
 
         self.cb_mode = QComboBox()
-        self.cb_mode.addItems([TEST, PRICE, TRADE, BOTH])
+        self.cb_mode.addItems([TEST_FOLDER, 'PRICE', 'TRADE', 'BOTH'])
         self.cb_mode.currentIndexChanged.connect(self.mode_change)
-        layout.addRow(QLabel(MODE+':'), self.cb_mode)
-
-        self.add_gnc_file_btn()
-        layout.addRow(self.gnc_label, self.gnc_file_btn)
+        layout.addRow(QLabel('Mode:'), self.cb_mode)
 
         self.chbx_json = QCheckBox("Save Monarch info to JSON file?")
         layout.addRow(QLabel("Save:"), self.chbx_json)
 
-        self.pb_logging = QPushButton("Change the logging level?")
+        self.pb_logging = QPushButton(LOG_LABEL)
         self.pb_logging.clicked.connect(self.get_log_level)
         layout.addRow(QLabel("Logging:"), self.pb_logging)
 
@@ -105,57 +116,114 @@ class AccessDriveUI(QDialog):
 
         self.gb_main.setLayout(layout)
 
-    def add_mon_file_btn(self):
-        self.mon_btn_title = F"Get {INPUT} file"
-        self.mon_file_btn = QPushButton(self.mon_btn_title)
-        self.mon_label = QLabel(INPUT+FILE_LABEL)
-        self.mon_file_btn.clicked.connect(partial(self.open_file_name_dialog, INPUT))
+    def add_file_btn(self):
+        self.file_btn_title = f"Get local file"
+        self.file_btn = QPushButton(self.file_btn_title)
+        self.file_label = QLabel(FILE_LABEL + SEND_LABEL)
+        self.file_btn.clicked.connect(partial(self.open_file_name_dialog, FILE_LABEL))
 
-    def add_gnc_file_btn(self):
-        self.gnc_btn_title = F"Get {GNC} file"
-        self.gnc_file_btn = QPushButton(NO_NEED)
-        self.gnc_label = QLabel(GNC+FILE_LABEL)
-        self.gnc_file_btn.clicked.connect(partial(self.open_file_name_dialog, GNC))
+    def add_folder_btn(self):
+        self.folder_btn_title = f"Get local folder"
+        self.folder_btn = QPushButton(self.folder_btn_title)
+        self.folder_label = QLabel(FOLDER_LABEL + SEND_LABEL)
+        self.folder_btn.clicked.connect(partial(self.open_file_name_dialog, FOLDER_LABEL))
 
-    def open_file_name_dialog(self, label: str):
-        self._lgr.info(label)
-        if label == INPUT:
-            f_filter = F"{INPUT} (*.monarch *.json);;All Files (*)"
-            f_dir = osp.join(BASE_PYTHON_FOLDER, "gnucash"+osp.sep+"CreateGncTxs"+osp.sep+"makeGncTx"+osp.sep)
-        else:  # gnucash file
-            f_filter = F"{GNC} (*.gnc *.gnucash);;All Files (*)"
-            f_dir = osp.join(BASE_GNUCASH_FOLDER, "bak-files"+osp.sep)
+    def open_file_name_dialog(self, label:str):
+        self._lgr.info(f"get {label} file.")
+        f_dir = HOME_FOLDER
+        if label == FILE_LABEL:
+            f_name, _ = QFileDialog.getOpenFileName(caption = f"Get {label} Files", filter = f"{FILE_LABEL}: All Files (*)",
+                                                    dir = f_dir, options = QFileDialog.Option.DontUseNativeDialog)
+        else:  # folder
+            f_name = QFileDialog.getExistingDirectory(caption = f"Get {label}", dir = f_dir,
+                                                      options = QFileDialog.Option.DontUseNativeDialog)
 
-        file_name, _ = QFileDialog.getOpenFileName(self, caption = f"Get {label} Files", filter = f_filter, dir = f_dir,
-                                                   options = QFileDialog.Option.DontUseNativeDialog)
-        if file_name:
-            self._lgr.info(F"\nFile selected: {file_name}")
-            display_name = file_name.split(osp.pathsep)[-1]
-            if label == INPUT:  # either a monarch or json file
-                self.mon_file = file_name
-                self.mon_file_btn.setText(display_name)
-            else:  # GNC file to write to
-                self.gnc_file = file_name
-                self.gnc_file_btn.setText(display_name)
+        if f_name:
+            self._lgr.info(f"Selected: {f_name}")
+            display_name = get_filename(f_name)
+            self.selected = f_name
+            if label == FILE_LABEL:  # file to send
+                self.file_btn.setText(display_name)
+                self.folder_btn.setText(NO_NEED)
+            else:  # folder to send
+                self.folder_btn.setText(display_name)
+                self.file_btn.setText(NO_NEED)
+
+    def fxn_change(self):
+        self._lgr.info(f"fxn_change; current layout = {repr(self.gb_main.layout())}")
+        if self.cb_fxn.currentText() == FUNCTIONS[3]:
+            self.activate_sendfiles_options()
+        elif self.cb_fxn.currentText() == FUNCTIONS[2]:
+            self.activate_sendfolder_options()
+        elif self.cb_fxn.currentText() == FUNCTIONS[4]:
+            self.activate_getfilemeta_options()
+        elif self.cb_fxn.currentText() == FUNCTIONS[5]:
+            self.activate_deletefiles_options()
+        elif self.cb_fxn.currentText() == FUNCTIONS[1]:
+            self.activate_getfiles_options()
+        elif self.cb_fxn.currentText() == FUNCTIONS[0]:
+            self.activate_getfolders_options()
+        else:
+            raise Exception("?? INVALID Function Choice??!!")
+
+    def get_drive_folder(self):
+        d_folder, ok = QInputDialog.getText(self, "Drive Folder", "Enter the name of the Drive folder to use (default = root)")
+        if ok:
+            self.drive_folder = d_folder
+            self._lgr.info(f"Drive folder changed to {d_folder}.")
+            self.pb_drive_folder.setText(d_folder)
 
     def mode_change(self):
-        if self.cb_mode.currentText() == TEST:
+        if self.cb_mode.currentText() == TEST_FOLDER:
             # need Gnucash file and domain only if in SEND mode
-            self.gnc_file_btn.setText(NO_NEED)
-            self.gnc_file = None
+            self.file_btn.setText(NO_NEED)
+            self.selected_file = None
         else:
-            if self.gnc_file is None:
-                self.gnc_file_btn.setText(self.gnc_btn_title)
+            if self.selected is None:
+                self.folder_btn.setText(self.folder_btn_title)
+
+    def activate_sendfiles_options(self):
+        # path to FILE to send
+        # option: drive folder to send to; default = root
+        self._lgr.info("activate_sendfiles_options")
+
+    def activate_sendfolder_options(self):
+        # path to FOLDER to send
+        # option: drive folder to send to; default = root
+        self._lgr.info("activate_sendfolder_options")
+
+    def activate_getfilemeta_options(self):
+        # ID OR NAME of file to query
+        self._lgr.info("activate_getfilemeta_options")
+
+    def activate_deletefiles_options(self):
+        # option: drive folder with files to delete; default = TEST_FOLDER
+        # option: type of files to delete; default = DEFAULT_FILETYPE
+        # option: date to delete files OLDER THAN; default = DEFAULT_DATE
+        # option: TEST mode: NO deletions, just report; default = False
+        self._lgr.info("activate_deletefiles_options")
+
+    def activate_getfiles_options(self):
+        # ?? ADD? option: drive folder with files to retrieve info; default = root
+        # option: type of files to retrieve info; default = DEFAULT_FILETYPE
+        # option: type of files is a MimeType instead of a filename extension; default = False
+        # option: NUMBER of files to retrieve info on; default = DEFAULT_NUM_FILES, max = MAX_NUM_FILES
+        self._lgr.info("activate_getfiles_options")
+
+    def activate_getfolders_options(self):
+        # None
+        self._lgr.info("activate_getfolders_options")
 
     def get_log_level(self):
         num, ok = QInputDialog.getInt(self, "Logging Level", "Enter a value (0-100)", value = self.log_level, minValue = 0, maxValue = 100)
         if ok:
             self.log_level = num
-            self._lgr.info(F"logging level changed to {num}.")
+            self._lgr.info(f"logging level changed to {num}.")
+            self.pb_logging.setText(f"{LOG_LABEL}    Current value = {num}")
 
     def button_click(self):
         """Prepare the parameters string and send to main function of module parseMonarchCopyRep."""
-        self._lgr.info(F"Clicked '{self.exe_btn.text()}'.")
+        self._lgr.info(f"Clicked '{self.exe_btn.text()}'.")
 
         if self.mon_file is None:
             msg_box = QMessageBox()
@@ -170,7 +238,7 @@ class AccessDriveUI(QDialog):
             cl_params.append('--json')
 
         mode = self.cb_mode.currentText()
-        if mode != TEST:
+        if mode != TEST_FOLDER:
             if self.gnc_file is None:
                 msg_box = QMessageBox()
                 msg_box.setIcon(QMessageBox.Icon.Warning)
@@ -181,9 +249,9 @@ class AccessDriveUI(QDialog):
             cl_params.append('-g'+self.gnc_file)
             cl_params.append('-t'+mode)
 
-        self._lgr.info(F"Parameters = \n{json.dumps(cl_params, indent = 4)}\nCalling main_monarch_input...")
+        self._lgr.info(f"Parameters = \n{json.dumps(cl_params, indent = 4)}\nCalling main_monarch_input...")
         try:
-            response = main_monarch_input(cl_params)
+            response = main_drive_functions(cl_params)
             reply = {"response":response}
         except Exception as bcce:
             self.response_box.append(f"\nEXCEPTION:\n{repr(bcce)}\n")
@@ -194,7 +262,7 @@ class AccessDriveUI(QDialog):
 
 
 if __name__ == "__main__":
-    log_control = MhsLogger(AccessDriveUI.__name__, suffix = "gncout")
+    log_control = MhsLogger(AccessDriveUI.__name__, con_level = DEFAULT_LOG_LEVEL, suffix = "gncout")
     dialog = None
     app = None
     code = 0

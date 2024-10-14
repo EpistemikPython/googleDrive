@@ -108,14 +108,14 @@ class MhsDriveAccess:
             self._lock.release()
             self._lgr.info(f"released Drive lock at: {get_current_time()}")
 
-    def delete_file(self, p_name:str, p_file_id:str, p_filedate:str, test_mode:bool) -> str:
+    def delete_file(self, p_name:str, p_file_id:str, p_filedate:str, p_test:bool) -> str:
         """Delete a file.
         :arg    p_name: name of the file
         :arg    p_file_id: ID of the file to delete
         :arg    p_filedate: modified time of the file
-        :arg    test_mode: DO NOT actually delete the files; just report
+        :arg    p_test: DO NOT actually delete the files; just report
         """
-        if test_mode:
+        if p_test:
             result = f"Testing: Would have deleted file '{p_name}' with date: {p_filedate}"
         else:
             response = self.service.delete(fileId = p_file_id).execute()
@@ -124,10 +124,10 @@ class MhsDriveAccess:
         self._lgr.info(result)
         return result
 
-    def get_old_files(self, fdate:str, pid:str, parent_folder:str):
+    def get_old_files(self, p_date:str, p_pid:str, p_parent:str):
         """retrieve files in the specified parent folder that are older than the specified date"""
         # could include 'mimeType=x' in the query but some file types in Google Drive RARELY have the proper mimetype assigned
-        query = f"modifiedTime < '{fdate}' and '{pid}' in parents"
+        query = f"modifiedTime < '{p_date}' and '{p_pid}' in parents"
         self._lgr.info(f"query: [{query}]")
         results = self.service.list(q = query, spaces = "drive", pageSize = MAX_FILES_DELETE,
                                      fields = "files(name, id, parents, mimeType, modifiedTime)").execute()
@@ -138,13 +138,13 @@ class MhsDriveAccess:
                 # n.b. items 'shared with me' are in my Drive but WITHOUT a parent
                 self._lgr.debug(f"{item['name']} <{item['mimeType']}> %{item['modifiedTime']}% ({item['id']}) "
                           f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
-            self._lgr.info(f">> found {len(items)} files older than '{fdate}' in folder '{parent_folder}'.\n")
+            self._lgr.info(f">> found {len(items)} files older than '{p_date}' in folder '{p_parent}'.\n")
         else:
             self._lgr.warning("No files found?!")
 
         return items
 
-    def send_folder(self, fpath:str, pid:str, parent:str, wildcard:str = '*'):
+    def send_folder(self, p_path:str, p_pid:str, p_parent:str, p_wild:str = '*'):
         """SEND the files in a folder to my Google drive."""
         self._lgr.debug(get_current_time())
         if not self.service:
@@ -152,17 +152,17 @@ class MhsDriveAccess:
             return
         num_sent = 0
         try:
-            fgw = glob.glob(fpath + osp.sep + wildcard)
+            fgw = glob.glob(p_path + osp.sep + p_wild)
             for item in fgw:
                 if osp.isfile(item):
-                    self.send_file(item, pid, parent)
+                    self.send_file(item, p_pid, p_parent)
                     num_sent += 1
         except Exception as sfdex:
             raise sfdex
 
-        self._lgr.info(f"Sent {num_sent} files to folder '{parent}'.")
+        self._lgr.info(f"Sent {num_sent} files to folder '{p_parent}'.")
 
-    def send_file(self, filepath:str, pid:str, parent:str) -> str:
+    def send_file(self, p_path:str, p_pid:str, p_parent:str) -> str:
         """SEND a file to my Google drive
         :return server response """
         if not self.service:
@@ -170,13 +170,13 @@ class MhsDriveAccess:
             return ''
         try:
             mime_type = FILE_MIME_TYPES["txt"]
-            f_type = get_filetype(filepath)
+            f_type = get_filetype(p_path)
             if f_type and f_type in FILE_MIME_TYPES.keys():
                 mime_type = FILE_MIME_TYPES[f_type]
 
-            file_metadata = {"name":get_filename(filepath), "parents":[pid]}
-            media = MediaFileUpload(filepath, mimetype = mime_type, resumable = True)
-            self._lgr.info(f"Sending file '{filepath}' to Drive://{parent}/")
+            file_metadata = {"name":get_filename(p_path), "parents":[p_pid]}
+            media = MediaFileUpload(p_path, mimetype = mime_type, resumable = True)
+            self._lgr.info(f"Sending file '{p_path}' to Drive://{p_parent}/")
             file = self.service.create(body = file_metadata, media_body = media, fields = "id").execute()
             response = file.get("id")
             self._lgr.info(f"Success: Google Id = {response}")
@@ -191,7 +191,7 @@ class MhsDriveAccess:
         for item in file_metadata:
             self._lgr.info(f"\t{item}: {file_metadata[item]}")
 
-    def read_file_info(self, p_ftype:str, p_numitems:int, p_mime:bool, save_option:bool):
+    def read_file_info(self, p_ftype:str, p_numitems:int, p_mime:bool, p_save:bool):
         """Read file info from my Google drive."""
         mime = FILE_MIME_TYPES[p_ftype] if p_mime else ""
         fdate = "" if p_mime else DEFAULT_DATE
@@ -219,7 +219,7 @@ class MhsDriveAccess:
             if len(found_items) > p_numitems:
                 break
         self._lgr.info(f">> {len(found_items)} '{p_ftype}' files found.\n")
-        if save_option and found_items:
+        if p_save and found_items:
             jfile = save_to_json(get_base_filename(argv[0]), found_items)
             self._lgr.info(f"Saved results to '{jfile}'.")
 
@@ -273,17 +273,6 @@ class MhsDriveAccess:
 def prepare_args():
     arg_parser = ArgumentParser( description = "Access information or perform actions on my Google Drive.",
                                  prog = f"python3 {get_filename(argv[0])}" )
-    # optional arguments
-    arg_parser.add_argument('-j', '--jsonsave', action="store_true", default=False,
-                            help = "Write the results to a JSON file")
-    arg_parser.add_argument("-l", "--log_location", metavar = "PATHNAME",
-                            help = f"path to a local folder where logs will be saved")
-    arg_parser.add_argument('-p', '--parent', type = str, default = "root",
-                            help = "name of the Drive parent folder to use; DEFAULT = 'root'")
-    arg_parser.add_argument('-t', '--type', type=str, default=f"{DEFAULT_FILETYPE}",
-                            help = f"type of file to gather info on; DEFAULT = '{DEFAULT_FILETYPE}'")
-    arg_parser.add_argument('-y', '--mimetype', action="store_true", default=False,
-                            help="search for files using mimeType instead of filename extension; DEFAULT = False")
     # one argument required
     req_group = arg_parser.add_argument_group("ONE argument REQUIRED")
     mex_group = req_group.add_mutually_exclusive_group(required=True)
@@ -297,10 +286,22 @@ def prepare_args():
                            help = "Get the metadata for a Google Drive file")
     mex_group.add_argument('-s', '--send', metavar = "PATHNAME",
                            help = "path to a local file|folder to SEND to Google drive")
+    # optional arguments
+    common_group = arg_parser.add_argument_group("Common options")
+    common_group.add_argument('-j', '--jsonsave', action="store_true", default=False,
+                              help = "Write the results to a JSON file")
+    common_group.add_argument("-l", "--log_location", metavar = "PATHNAME", default = DEFAULT_LOG_FOLDER,
+                              help = f"path to a local folder where logs will be saved; DEFAULT = {DEFAULT_LOG_FOLDER}")
+    common_group.add_argument('-p', '--parent', type = str, default = "root",
+                              help = "name of the Drive parent folder to use; DEFAULT = 'root'")
+    common_group.add_argument('-t', '--type', type=str, default=f"{DEFAULT_FILETYPE}",
+                              help = f"type of file to gather info on; DEFAULT = '{DEFAULT_FILETYPE}'")
+    common_group.add_argument('-y', '--mimetype', action="store_true", default=False,
+                              help="search for files using mimeType instead of filename extension; DEFAULT = False")
     # metadata options
-    send_group = arg_parser.add_argument_group("Metadata options")
-    send_group.add_argument('-i', '--id_of_file', type = str, default = FILE_IDS[DEFAULT_METADATA_FILE] ,
-                            metavar = "ID", help = f"ID of the Drive file to query; DEFAULT file = '{DEFAULT_METADATA_FILE}'")
+    meta_group = arg_parser.add_argument_group("Metadata options")
+    meta_group.add_argument('-i', '--name_of_file', type = str, default = DEFAULT_METADATA_FILE ,
+                            metavar = "NAME", help = f"Name of the Drive file to query; DEFAULT = '{DEFAULT_METADATA_FILE}'")
     # delete options
     delete_group = arg_parser.add_argument_group("Delete options")
     delete_group.add_argument('-q', '--testing', action="store_true", default=False,
@@ -330,9 +331,11 @@ def process_args(argx:list):
         num_files = DEFAULT_NUM_FILES if args.numfiles <= 0 or args.numfiles > MAX_NUM_ITEMS else args.numfiles
 
     choic = FOLDERS_LABEL if args.folders else GET_FILES_LABEL if args.getfiles else METADATA_LABEL if args.metadata else args.send
+    logloc = args.log_location if osp.isdir(args.log_location) else DEFAULT_LOG_FOLDER
+    meta_id = FILE_IDS[DEFAULT_METADATA_FILE] if args.name_of_file not in FILE_IDS.keys() else FILE_IDS[args.name_of_file]
 
-    return ( args.jsonsave, choic, args.parent, parent_id, args.type, args.mimetype, num_files, args.id_of_file,
-             args.log_location if args.log_location else DEFAULT_LOG_FOLDER, args.delete_date, args.testing )
+    return ( args.jsonsave, choic, args.parent, parent_id, args.type, args.mimetype, num_files,
+             meta_id, logloc, args.delete_date, args.testing )
 
 def main_drive_functions(args:list):
     """ENTRY POINT to utilize the drive access functions."""

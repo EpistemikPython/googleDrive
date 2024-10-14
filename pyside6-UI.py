@@ -21,8 +21,6 @@ from functools import partial
 path.append("/home/marksa/git/Python/utils")
 from driveFunctions import *
 
-UI_DEFAULT_LOG_LEVEL:int = logging.INFO
-BASE_GNUCASH_FOLDER:str = "/home/marksa/dev/Gnucash"
 FILE_LABEL:str   = "File"
 FOLDER_LABEL:str = "Folder"
 SEND_LABEL:str   = " to send:"
@@ -30,14 +28,14 @@ LOG_LABEL:str    = "Change the logging level?"
 ROOT_LABEL:str   = "root"
 NO_NEED:str      = "NOT NEEDED"
 FUNCTIONS = ["Get all Drive Folders", "Get Drive files", "Send local folder",
-             "Send local files", "Get file metadata", "Delete Drive files"]
+             "Send local file", "Get file metadata", "Delete Drive files"]
 
 # noinspection PyAttributeOutsideInit
-class AccessDriveUI(QDialog):
-    """UI for choosing and running my Google Drive Access functions."""
+class DriveFunctionsUI(QDialog):
+    """UI for choosing and running my Google Drive functions."""
     def __init__(self):
         super().__init__()
-        self.title = "Access Drive UI"
+        self.title = "Drive Functions UI"
         self.left = 42
         self.top = 64
         self.width = 660
@@ -92,10 +90,10 @@ class AccessDriveUI(QDialog):
         self.pb_drive_folder.clicked.connect(self.get_drive_folder)
         layout.addRow(QLabel("Drive folder:"), self.pb_drive_folder)
 
-        self.pb_meta_filename = QPushButton("Select the Drive file name to query for metadata.")
+        self.pb_meta_filename = QPushButton("Select the Drive file to query for metadata.")
         self.meta_filename = DEFAULT_METADATA_FILE
-        self.pb_drive_folder.clicked.connect(self.get_meta_filename)
-        layout.addRow(QLabel("File to query for metadata:"), self.pb_meta_filename)
+        self.pb_meta_filename.clicked.connect(self.get_meta_filename)
+        layout.addRow(QLabel("Metadata:"), self.pb_meta_filename)
 
         self.cb_mode = QComboBox()
         self.cb_mode.addItems([TEST_FOLDER, 'PRICE', 'TRADE', 'BOTH'])
@@ -152,7 +150,7 @@ class AccessDriveUI(QDialog):
     def fxn_change(self):
         self._lgr.info(f"fxn_change; current layout = {repr(self.gb_main.layout())}")
         if self.cb_fxn.currentText() == FUNCTIONS[3]:
-            self.activate_sendfiles_options()
+            self.activate_sendfile_options()
         elif self.cb_fxn.currentText() == FUNCTIONS[2]:
             self.activate_sendfolder_options()
         elif self.cb_fxn.currentText() == FUNCTIONS[4]:
@@ -160,18 +158,26 @@ class AccessDriveUI(QDialog):
         elif self.cb_fxn.currentText() == FUNCTIONS[5]:
             self.activate_deletefiles_options()
         elif self.cb_fxn.currentText() == FUNCTIONS[1]:
-            self.activate_getfiles_options()
+            self.activate_getoldfiles_options()
         elif self.cb_fxn.currentText() == FUNCTIONS[0]:
             self.activate_getfolders_options()
         else:
             raise Exception("?? INVALID Function Choice??!!")
 
     def get_drive_folder(self):
-        d_folder, ok = QInputDialog.getText(self, "Drive Folder", "Enter the name of the Drive folder to use (default = root)")
+        d_folder, ok = QInputDialog.getText(self, "Drive Folder", "Enter the name of the Drive folder to search (default = root)")
         if ok:
             self.drive_folder = d_folder
             self._lgr.info(f"Drive folder changed to {d_folder}.")
             self.pb_drive_folder.setText(d_folder)
+
+    def get_meta_filename(self):
+        meta, ok = QInputDialog.getText(self, "Metadata Filename",
+                                        f"Enter the name of the file to query (default = {self.meta_filename})")
+        if ok:
+            self.meta_filename = meta
+            self._lgr.info(f"Meta file changed to {meta}.")
+            self.pb_meta_filename.setText(meta)
 
     def mode_change(self):
         if self.cb_mode.currentText() == TEST_FOLDER:
@@ -182,10 +188,10 @@ class AccessDriveUI(QDialog):
             if self.selected is None:
                 self.folder_btn.setText(self.folder_btn_title)
 
-    def activate_sendfiles_options(self):
+    def activate_sendfile_options(self):
         # path to FILE to send
         # option: drive folder to send to; default = root
-        self._lgr.info("activate_sendfiles_options")
+        self._lgr.info("activate_sendfile_options")
 
     def activate_sendfolder_options(self):
         # path to FOLDER to send
@@ -203,12 +209,12 @@ class AccessDriveUI(QDialog):
         # option: TEST mode: NO deletions, just report; default = False
         self._lgr.info("activate_deletefiles_options")
 
-    def activate_getfiles_options(self):
+    def activate_getoldfiles_options(self):
         # ?? ADD? option: drive folder with files to retrieve info; default = root
         # option: type of files to retrieve info; default = DEFAULT_FILETYPE
         # option: type of files is a MimeType instead of a filename extension; default = False
         # option: NUMBER of files to retrieve info on; default = DEFAULT_NUM_FILES, max = MAX_NUM_FILES
-        self._lgr.info("activate_getfiles_options")
+        self._lgr.info("activate_getoldfiles_options")
 
     def activate_getfolders_options(self):
         # None
@@ -258,17 +264,17 @@ class AccessDriveUI(QDialog):
             raise bcce
 
         self.response_box.append(json.dumps(reply, indent = 4))
-# END class AccessDriveUI
+# END class DriveFunctionsUI
 
 
 if __name__ == "__main__":
-    log_control = MhsLogger(AccessDriveUI.__name__, con_level = DEFAULT_LOG_LEVEL, suffix = "gncout")
+    log_control = MhsLogger(DriveFunctionsUI.__name__, con_level = DEFAULT_LOG_LEVEL)
     dialog = None
     app = None
     code = 0
     try:
         app = QApplication(argv)
-        dialog = AccessDriveUI()
+        dialog = DriveFunctionsUI()
         dialog.show()
         app.exec()
     except KeyboardInterrupt as mki:

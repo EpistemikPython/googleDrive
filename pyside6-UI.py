@@ -52,7 +52,6 @@ class DriveFunctionsUI(QDialog):
         self.init_ui()
         self._lgr.info(f"{self.title} Runtime = {dt.now().strftime(RUN_DATETIME_FORMAT)}\n")
 
-    # TODO: better layout of widgets
     def init_ui(self):
         self.log_level = lg.INFO
         self.setWindowTitle(self.title)
@@ -77,7 +76,7 @@ class DriveFunctionsUI(QDialog):
 
     def create_group_box(self):
         self.gb_main = QGroupBox("Parameters")
-        layout = QFormLayout()
+        gblayout = QFormLayout()
 
         # choose a function
         self.fxn_keys = list(FUNCTIONS.keys())
@@ -87,34 +86,34 @@ class DriveFunctionsUI(QDialog):
         self.cb_fxn.currentIndexChanged.connect(self.fxn_change)
         self.lbl_fxn = QLabel("Function to run:")
         self.lbl_fxn.setStyleSheet("QLabel {font-weight: bold;}")
-        layout.addRow(self.lbl_fxn, self.cb_fxn)
+        gblayout.addRow(self.lbl_fxn, self.cb_fxn)
 
         # local file or folder
         self.fsend_title = "Get local file or folder"
         self.filesend_title = "Get local file"
         self.foldersend_title = "Get local folder"
-        self.pb_fsend = QPushButton(self.fsend_title)
+        self.pb_fsend = QPushButton(NO_NEED)
         self.fsend_label = QLabel("Send:")
         self.pb_fsend.clicked.connect(partial(self.open_file_name_dialog, self.fsend_title))
-        layout.addRow(self.fsend_label, self.pb_fsend)
+        gblayout.addRow(self.fsend_label, self.pb_fsend)
 
         # Drive file or folder
         self.do_title = "Specify Drive folder/file"
         self.do_file_title = "Specify Drive file"
         self.do_folder_title = "Specify Drive folder"
-        self.pb_drive_option = QPushButton(self.do_title)
+        self.pb_drive_option = QPushButton(NO_NEED)
         self.drive_folder = ROOT_LABEL
         self.meta_filename = DEFAULT_METADATA_FILE
         self.pb_drive_option.clicked.connect(self.get_drive_option)
-        layout.addRow(QLabel("Drive option:"), self.pb_drive_option)
+        gblayout.addRow(QLabel("Drive option:"), self.pb_drive_option)
 
         # type of file
         self.ft_title = "Type of file to query"
-        self.pb_filetype = QPushButton(self.ft_title)
+        self.pb_filetype = QPushButton(NO_NEED)
         self.ft_selected = DEFAULT_FILETYPE
         self.ft_label = "File type:"
         self.pb_filetype.clicked.connect(self.get_filetype)
-        layout.addRow(QLabel(self.ft_label), self.pb_filetype)
+        gblayout.addRow(QLabel(self.ft_label), self.pb_filetype)
 
         # date of file
         self.de_date = QDateEdit(DEFAULT_QDATE, self)
@@ -123,36 +122,38 @@ class DriveFunctionsUI(QDialog):
         self.dt_selected = DEFAULT_QDATE
         self.dt_label = "Files older than:"
         self.de_date.userDateChanged.connect(self.get_date)
-        layout.addRow(QLabel(self.dt_label), self.de_date)
+        gblayout.addRow(QLabel(self.dt_label), self.de_date)
 
         # mimeType option
         self.chbx_mime = QCheckBox("Type of file gets <mimeType> instead of <filename extension>?")
-        layout.addRow(QLabel("MimeType:"), self.chbx_mime)
+        gblayout.addRow(QLabel("MimeType:"), self.chbx_mime)
 
         # number of files
         self.num_files = 1
-        self.pb_numfiles = QPushButton(NUMFILES_LABEL)
+        self.pb_numfiles = QPushButton(NO_NEED)
         self.pb_numfiles.clicked.connect(self.get_num_files)
-        layout.addRow(QLabel("Number of files:"), self.pb_numfiles)
+        gblayout.addRow(QLabel("Number of files:"), self.pb_numfiles)
 
         # save option
         self.chbx_save = QCheckBox("Save function response to JSON file?")
-        layout.addRow(QLabel("Save:"), self.chbx_save)
+        gblayout.addRow(QLabel("Save:"), self.chbx_save)
 
         # testing option
-        self.chbx_test = QCheckBox("Just REPORT the deletion of files WITHOUT any actual deletions?")
-        layout.addRow(QLabel("Test:"), self.chbx_test)
+        self.chbx_test = QCheckBox("Just REPORT the files found WITHOUT any actual deletions?")
+        gblayout.addRow(QLabel("Test:"), self.chbx_test)
 
+        # change logging
         self.pb_logging = QPushButton(LOG_LABEL)
         self.pb_logging.clicked.connect(self.get_log_level)
-        layout.addRow(QLabel("Logging:"), self.pb_logging)
+        gblayout.addRow(QLabel("Logging:"), self.pb_logging)
 
+        # execute
         self.exe_btn = QPushButton("Go!")
         self.exe_btn.setStyleSheet("QPushButton {font-weight: bold; color: yellow; background-color: red;}")
         self.exe_btn.clicked.connect(self.button_click)
-        layout.addRow(QLabel("EXECUTE:"), self.exe_btn)
+        gblayout.addRow(QLabel("EXECUTE:"), self.exe_btn)
 
-        self.gb_main.setLayout(layout)
+        self.gb_main.setLayout(gblayout)
 
     def fxn_change(self):
         self.selected_function = self.cb_fxn.currentText()
@@ -162,10 +163,12 @@ class DriveFunctionsUI(QDialog):
             s_title = self.filesend_title if sf == self.fxn_keys[3] else self.foldersend_title
             self.pb_fsend.setText(s_title)
             self.pb_fsend.setStyleSheet("QPushButton {font-weight: bold; color: red; background-color: cyan;}")
-            self.pb_drive_option.setText("Option: "+self.do_folder_title)
+            self.pb_drive_option.setText(self.do_folder_title)
             self.pb_drive_option.setStyleSheet("QPushButton {font-weight: bold; color: green;}")
             self.pb_numfiles.setText(NO_NEED)
             self.pb_numfiles.setStyleSheet("")
+            self.pb_filetype.setText(NO_NEED)
+            self.pb_filetype.setStyleSheet("")
         elif sf == self.fxn_keys[4]: # metadata | option: name of file to query
             self.pb_drive_option.setText(self.do_file_title)
             self.pb_drive_option.setStyleSheet("QPushButton {font-weight: bold; color: red; background-color: cyan;}")
@@ -173,27 +176,38 @@ class DriveFunctionsUI(QDialog):
             self.pb_fsend.setStyleSheet("")
             self.pb_numfiles.setText(NO_NEED)
             self.pb_numfiles.setStyleSheet("")
-        elif sf == self.fxn_keys[5]: # delete | options: drive folder,
+            self.pb_filetype.setText(NO_NEED)
+            self.pb_filetype.setStyleSheet("")
+        elif sf == self.fxn_keys[5]: # delete | options: drive folder, file type, file date, num files, test mode
             self.pb_drive_option.setText("Option: "+self.do_folder_title)
             self.pb_drive_option.setStyleSheet("QPushButton {font-weight: bold; color: green;}")
-            # option: type of files to delete; default = DEFAULT_FILETYPE
-            # option: date to delete files OLDER THAN; default = DEFAULT_DATE
-            # option: TEST mode: NO deletions, just report; default = False
+            self.pb_filetype.setText("Option: "+self.ft_title)
+            self.pb_filetype.setStyleSheet("QPushButton {font-weight: bold; color: green;}")
+            self.pb_numfiles.setText("Option: "+NUMFILES_LABEL)
+            self.pb_numfiles.setStyleSheet("QPushButton {font-weight: bold; color: green;}")
             self.pb_fsend.setText(NO_NEED)
             self.pb_fsend.setStyleSheet("")
-            self.pb_numfiles.setText(NO_NEED)
-            self.pb_numfiles.setStyleSheet("")
-        elif sf == self.fxn_keys[1]: # get files
-            pass
-            # ?? ADD? option: drive folder with files to retrieve info; default = root
-            # option: type of files to retrieve info; default = DEFAULT_FILETYPE
-            # option: type of files is a MimeType instead of a filename extension; default = False
-            # option: NUMBER of files to retrieve info on; default = DEFAULT_NUM_FILES, max = MAX_NUM_FILES
+        elif sf == self.fxn_keys[1]: # get files | options: file type, number of files, mimeType
+            # option: type of files
+            self.pb_filetype.setText("Option: "+self.ft_title)
+            self.pb_filetype.setStyleSheet("QPushButton {font-weight: bold; color: green;}")
+            # option: NUMBER of files
+            self.pb_numfiles.setText("Option: "+NUMFILES_LABEL)
+            self.pb_numfiles.setStyleSheet("QPushButton {font-weight: bold; color: green;}")
+            self.pb_fsend.setText(NO_NEED)
+            self.pb_fsend.setStyleSheet("")
+            # ?? Add option: drive folder ?
+            self.pb_drive_option.setText(NO_NEED)
+            self.pb_drive_option.setStyleSheet("")
         elif sf == self.fxn_keys[0]: # get all folders | NO options
+            self.pb_drive_option.setText(NO_NEED)
+            self.pb_drive_option.setStyleSheet("")
             self.pb_fsend.setText(NO_NEED)
             self.pb_fsend.setStyleSheet("")
             self.pb_numfiles.setText(NO_NEED)
             self.pb_numfiles.setStyleSheet("")
+            self.pb_filetype.setText(NO_NEED)
+            self.pb_filetype.setStyleSheet("")
         else:
             raise Exception("?? INVALID Function Choice??!!")
 
@@ -238,7 +252,7 @@ class DriveFunctionsUI(QDialog):
         if ok:
             self._lgr.info(f"File type = '{ft_choice}'.")
             self.ft_selected = ft_choice
-            self.pb_filetype.setText(f"{self.ft_title}: {ft_choice}")
+            self.pb_filetype.setText(f"{self.ft_title} = {ft_choice}")
 
     def get_date(self):
         self.dt_selected = self.de_date.date()
@@ -246,12 +260,13 @@ class DriveFunctionsUI(QDialog):
         # self.de_date.setText(f"Selected: {self.de_selected}")
 
     def get_num_files(self):
-        num, ok = QInputDialog.getInt(self, "Number of Files", f"Enter a value (1-{MAX_NUM_ITEMS})",
-                                      value = self.num_files, minValue = 1, maxValue = MAX_NUM_ITEMS)
+        nfmax = MAX_FILES_DELETE if self.selected_function == self.fxn_keys[5] else MAX_NUM_ITEMS
+        fnum, ok = QInputDialog.getInt(self, "Number of Files", f"Enter a value (1-{nfmax})",
+                                       value = self.num_files, minValue = 1, maxValue = nfmax)
         if ok:
-            self.num_files = num
-            self._lgr.info(f"number of files changed to {num}.")
-            dtext = f"Current value = {num}" if self.selected_function == self.fxn_keys[1] else NO_NEED
+            self.num_files = fnum if nfmax >= fnum >= 1 else DEFAULT_NUM_FILES
+            self._lgr.info(f"number of files changed to {fnum}.")
+            dtext = f"Current value = {fnum}" if self.selected_function == self.fxn_keys[1] else NO_NEED
             self.pb_numfiles.setText(dtext)
 
     def get_log_level(self):
@@ -272,18 +287,18 @@ class DriveFunctionsUI(QDialog):
             mhsda = MhsDriveAccess(self.chbx_save.isChecked(), self.chbx_mime.isChecked(), self.chbx_test.isChecked(), self._lgr)
             mhsda.begin_session()
             if sf == self.fxn_keys[3] or sf == self.fxn_keys[2]: # send file or folder
-                response = exe(mhsda, self.forf_selected, FOLDER_IDS[self.drive_folder], self.drive_folder)
+                reply = exe(mhsda, self.forf_selected, FOLDER_IDS[self.drive_folder], self.drive_folder)
             elif sf == self.fxn_keys[4]: # metadata
-                response = exe(mhsda, self.forf_selected, FILE_IDS[self.forf_selected])
+                reply = exe(mhsda, self.forf_selected, FILE_IDS[self.forf_selected])
             elif sf == self.fxn_keys[5]: # delete
-                response = exe(mhsda, FOLDER_IDS[self.drive_folder], self.ft_selected, self.dt_selected)
+                reply = exe(mhsda, FOLDER_IDS[self.drive_folder], self.ft_selected, self.dt_selected)
             elif sf == self.fxn_keys[1]: # get files
-                response = exe(mhsda, self.ft_selected, self.num_files)
+                reply = exe(mhsda, self.ft_selected, self.num_files)
             elif sf == self.fxn_keys[0]: # get all folders
-                response = exe(mhsda)
+                reply = exe(mhsda)
             else:
                 raise Exception("?? INVALID Function Choice??!!")
-            reply = {"response":response}
+            response = {"response":reply}
         except Exception as bcce:
             self.response_box.append(f"\nEXCEPTION:\n{repr(bcce)}\n")
             raise bcce
@@ -291,7 +306,11 @@ class DriveFunctionsUI(QDialog):
             if mhsda:
                 mhsda.end_session()
 
-        self.response_box.append(json.dumps(reply, indent = 4))
+        if mhsda.save and response:
+            jfile = save_to_json(get_base_filename(argv[0]), response)
+            self._lgr.info(f"Saved results to '{jfile}'.")
+
+        self.response_box.append(json.dumps(response, indent = 4))
 # END class DriveFunctionsUI
 
 

@@ -60,7 +60,7 @@ METADATA_LABEL     = "metadata"
 # see https://github.com/googleapis/google-api-python-client/issues/299
 lg.getLogger("googleapiclient.discovery_cache").setLevel(lg.ERROR)
 
-def get_credentials(lgr:logging.Logger):
+def get_credentials(p_lgr:logging.Logger):
     """Get the proper credentials needed to access my Google drive."""
     creds = None
     # The TOKEN file stores the user's access & refresh tokens and is
@@ -70,10 +70,10 @@ def get_credentials(lgr:logging.Logger):
     # if there are no (valid) credentials available, let the user log in
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            lgr.warning("Need to refresh creds.")
+            p_lgr.warning("Need to refresh creds.")
             creds.refresh( Request() )
         else:
-            lgr.warning("Need to regenerate creds.")
+            p_lgr.warning("Need to regenerate creds.")
             flow = InstalledAppFlow.from_client_secrets_file( CREDENTIALS_FILE, DRIVE_ACCESS_SCOPE )
             creds = flow.run_local_server(port=0)
         # save the credentials for the next run
@@ -112,105 +112,6 @@ class MhsDriveAccess:
             self._lock.release()
             self._lgr.info(f"released Drive lock at: {get_current_time()}")
 
-    def delete_files(self, p_pid:str, p_filetype:str, p_filedate:str) -> list:
-        mimetype = FILE_MIME_TYPES[p_filetype] if self.mime else ""
-        items = self.find_items(p_date = p_filedate, p_pid = p_pid, p_mimetype = mimetype)
-        deleted = []
-        for item in items:
-            fname = item['name']
-            fid = item['id']
-            fdate = item['modifiedTime']
-            ftype = get_filetype(fname)[1:]
-            if self.mime or ftype == p_filetype:
-                if self.test:
-                    result = f"Testing: Would have deleted file '{fname}' with date: {fdate}"
-                else:
-                    response = self.service.delete(fileId = fid).execute()
-                    result = f"delete response[{fname} @ {fdate}] = '{response}'."
-                self._lgr.info(result)
-                deleted.append(result)
-                if len(deleted) > MAX_FILES_DELETE:
-                    break
-        if self.save and items:
-            jfile = save_to_json(get_base_filename(argv[0]), items)
-            self._lgr.info(f"Saved results to '{jfile}'.")
-        return deleted
-
-    def send_folder(self, p_path:str, p_pid:str, p_parent:str):
-        """SEND all the files in a local folder to my Google drive."""
-        self._lgr.debug(get_current_time())
-        if not self.service:
-            self._lgr.warning("No Session!")
-            return
-        responses = []
-        try:
-            fgw = glob.glob(p_path + osp.sep + '*')
-            for item in fgw:
-                if osp.isfile(item):
-                    reply = self.send_file(item, p_pid, p_parent)
-                    if reply:
-                        responses.append(reply)
-        except Exception as sfdex:
-            raise sfdex
-        return responses
-
-    def send_file(self, p_path:str, p_pid:str, p_parent:str) -> str:
-        """SEND a local file to my Google drive
-        :return server response """
-        if not self.service:
-            self._lgr.warning("No Session!")
-            return ''
-        try:
-            mime_type = FILE_MIME_TYPES["txt"]
-            f_type = get_filetype(p_path)
-            if f_type and f_type in FILE_MIME_TYPES.keys():
-                mime_type = FILE_MIME_TYPES[f_type]
-
-            file_metadata = {"name":get_filename(p_path), "parents":[p_pid]}
-            media = MediaFileUpload(p_path, mimetype = mime_type, resumable = True)
-            self._lgr.info(f"Sending file '{p_path}' to Drive://{p_parent}/")
-            file = self.service.create(body = file_metadata, media_body = media, fields = "id").execute()
-            response = file.get("id")
-            self._lgr.info(f"Success: Google Id = {response}")
-        except Exception as sfex:
-            raise sfex
-        return response
-
-    def get_file_metadata(self, p_filename:str, p_file_id:str):
-        file_metadata = self.service.get(fileId = p_file_id).execute()
-        self._lgr.info(f"file '{p_filename}' metadata:")
-        return file_metadata
-
-    def read_file_info(self, p_ftype:str, p_numitems:int):
-        """Read file info from my Google drive."""
-        mime = FILE_MIME_TYPES[p_ftype] if self.mime else ""
-        fdate = "" if self.mime else DEFAULT_DATE
-        items = self.find_items(p_mimetype = mime, p_date = fdate)
-        found_items = []
-        if not items:
-            self._lgr.warning("No files found?!")
-            return
-        self._lgr.info(f"{len(items)} files retrieved. \n\t\t\t\tName \t\t  <type> \t(Id) \t\t\t\t   [parent id]")
-        for item in items:
-            if self.mime:
-                # all the files are of the queried mimeType
-                found_items.append(item)
-                # items 'shared with me' are in my Drive but without a parent
-                self._lgr.info(f"{item['name']} <{item['mimeType']}> ({item['id']}) "
-                               f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
-            else:
-                fname = f"{item['name']}"
-                # find the file type by using the filename extension
-                ftype = get_filetype(fname)[1:]
-                if ftype == p_ftype:
-                    found_items.append(item)
-                    self._lgr.info(f"{item['name']} <{item['mimeType']}> ({item['id']}) "
-                                   f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
-            if len(found_items) > p_numitems:
-                break
-        self._lgr.info(f">> {len(found_items)} '{p_ftype}' files found.\n")
-        return found_items
-
     def find_items(self, p_mimetype:str= "", p_date:str= "", p_pid:str= "", p_limit:int=0) -> list:
         """Find the specified items on my Google drive."""
         if not self.service:
@@ -229,7 +130,7 @@ class MhsDriveAccess:
             return []
 
         limit = p_limit if p_limit else MAX_NUM_ITEMS
-        self._lgr.info(f"query = '{iquery}'; limit = '{limit}'")
+        self._lgr.debug(f"query = '{iquery}'; limit = '{limit}'")
         try:
             page_token = None
             all_items = []
@@ -243,15 +144,121 @@ class MhsDriveAccess:
                 page_token = results.get("nextPageToken", None)
                 if page_token is None or len(all_items) > limit:
                     break
-            self._lgr.info(f">> Found {len(all_items)} items.\n")
+            self._lgr.debug(f">> Found {len(all_items)} items.\n")
         except Exception as ffex:
             raise ffex
         return all_items
 
+    def delete_files(self, p_pid:str, p_filetype:str, p_filedate:str):
+        if not self.service:
+            self._lgr.warning("No Session!")
+            return []
+        mimetype = FILE_MIME_TYPES[p_filetype] if self.mime else ""
+        items = self.find_items(p_date = p_filedate, p_pid = p_pid, p_mimetype = mimetype)
+        deleted = []
+        for item in items:
+            fname = item['name']
+            fid = item['id']
+            fdate = item['modifiedTime']
+            ftype = get_filetype(fname)[1:]
+            if self.mime or ftype == p_filetype:
+                if self.test:
+                    result = f"Testing: Would have deleted file '{fname}' with date: {fdate}"
+                else:
+                    response = self.service.delete(fileId = fid).execute()
+                    result = f"delete response[{fname} @ {fdate}] = '{response}'."
+                self._lgr.debug(result)
+                deleted.append(result)
+                if len(deleted) > MAX_FILES_DELETE:
+                    break
+        if self.save and items:
+            jfile = save_to_json(get_base_filename(argv[0]), items)
+            self._lgr.debug(f"Saved results to '{jfile}'.")
+        return deleted
+
+    def send_folder(self, p_path:str, p_pid:str, p_parent:str):
+        """SEND all the files in a local folder to my Google drive."""
+        if not self.service:
+            self._lgr.warning("No Session!")
+            return []
+        responses = []
+        try:
+            fgw = glob.glob(p_path + osp.sep + '*')
+            for item in fgw:
+                if osp.isfile(item):
+                    reply = self.send_file(item, p_pid, p_parent)
+                    if reply:
+                        responses.append(reply)
+        except Exception as sfdex:
+            raise sfdex
+        return responses
+
+    def send_file(self, p_path:str, p_pid:str, p_parent:str):
+        """SEND a local file to my Google drive."""
+        if not self.service:
+            self._lgr.warning("No Session!")
+            return []
+        try:
+            mime_type = FILE_MIME_TYPES["txt"]
+            f_type = get_filetype(p_path)
+            if f_type and f_type in FILE_MIME_TYPES.keys():
+                mime_type = FILE_MIME_TYPES[f_type]
+
+            file_metadata = {"name":get_filename(p_path), "parents":[p_pid]}
+            media = MediaFileUpload(p_path, mimetype = mime_type, resumable = True)
+            self._lgr.debug(f"Sending file '{p_path}' to Drive://{p_parent}/")
+            file = self.service.create(body = file_metadata, media_body = media, fields = "id").execute()
+            response = file.get("id")
+            self._lgr.debug(f"Success: Google Id = {response}")
+        except Exception as sfex:
+            raise sfex
+        return [response]
+
+    def get_file_metadata(self, p_filename:str, p_file_id:str):
+        if not self.service:
+            self._lgr.warning("No Session!")
+            return []
+        file_metadata = self.service.get(fileId = p_file_id).execute()
+        self._lgr.debug(f"file '{p_filename}' metadata:")
+        return [file_metadata]
+
+    def read_file_info(self, p_ftype:str, p_numitems:int):
+        """Read file info from my Google drive."""
+        if not self.service:
+            self._lgr.warning("No Session!")
+            return []
+        mime = FILE_MIME_TYPES[p_ftype] if self.mime else ""
+        fdate = "" if self.mime else DEFAULT_DATE
+        items = self.find_items(p_mimetype = mime, p_date = fdate)
+        found_items = []
+        if not items:
+            self._lgr.warning("No files found?!")
+            return
+        self._lgr.debug(f"{len(items)} files retrieved. \n\t\t\t\tName \t\t  <type> \t(Id) \t\t\t\t   [parent id]")
+        for item in items:
+            if self.mime:
+                # all the files are of the queried mimeType
+                found_items.append(item)
+                # items 'shared with me' are in my Drive but without a parent
+                self._lgr.debug(f"{item['name']} <{item['mimeType']}> ({item['id']}) "
+                                f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
+            else:
+                fname = f"{item['name']}"
+                # find the file type by using the filename extension
+                ftype = get_filetype(fname)[1:]
+                if ftype == p_ftype:
+                    found_items.append(item)
+                    self._lgr.debug(f"{item['name']} <{item['mimeType']}> ({item['id']}) "
+                                    f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
+            if len(found_items) > p_numitems:
+                break
+        self._lgr.info(f">> {len(found_items)} '{p_ftype}' files found.\n")
+        return found_items
+
     def find_all_folders(self):
         """Find ALL the folders on my Google drive."""
         folders = self.find_items(p_mimetype = FILE_MIME_TYPES["gfldr"])
-        self._lgr.info(f">> Found {len(folders)} folders.\n")
+        self._lgr.debug(f">> Found {len(folders)} folders.\n")
         return folders
 # END class MhsDriveAccess
 

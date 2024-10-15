@@ -10,11 +10,11 @@
 
 __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
-__python_version__ = "3.11+"
+__python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.149.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2021-05-14"
-__updated__ = "2024-10-12"
+__updated__ = "2024-10-15"
 
 from sys import argv, path
 import os
@@ -51,6 +51,7 @@ TEST_FOLDER       = "Test"
 MAX_FILES_DELETE  = 500
 DEFAULT_NUM_FILES = 100
 MAX_NUM_ITEMS     = 5000
+ROOT_LABEL:str     = "root"
 FOLDERS_LABEL      = "folders"
 GET_FILES_LABEL    = "getfiles"
 DELETE_FILES_LABEL = "deletefiles"
@@ -86,7 +87,10 @@ def get_credentials(lgr:logging.Logger):
 
 class MhsDriveAccess:
     """Start a locked session, read/write to my google drive, end the session."""
-    def __init__(self, p_logger:logging.Logger):
+    def __init__(self, p_save:bool, p_mime:bool, p_test:bool, p_logger:logging.Logger):
+        self.save = p_save
+        self.mime = p_mime
+        self.test = p_test
         self._lgr = p_logger
         # prevent different instances/threads from writing at the same time
         self._lock = threading.Lock()
@@ -108,62 +112,50 @@ class MhsDriveAccess:
             self._lock.release()
             self._lgr.info(f"released Drive lock at: {get_current_time()}")
 
-    def delete_file(self, p_name:str, p_file_id:str, p_filedate:str, p_test:bool) -> str:
-        """Delete a file.
-        :arg    p_name: name of the file
-        :arg    p_file_id: ID of the file to delete
-        :arg    p_filedate: modified time of the file
-        :arg    p_test: DO NOT actually delete the files; just report
-        """
-        if p_test:
-            result = f"Testing: Would have deleted file '{p_name}' with date: {p_filedate}"
-        else:
-            response = self.service.delete(fileId = p_file_id).execute()
-            result = f"delete response[{p_name} @ {p_filedate}] = '{response}'."
+    def delete_files(self, p_pid:str, p_filetype:str, p_filedate:str) -> list:
+        mimetype = FILE_MIME_TYPES[p_filetype] if self.mime else ""
+        items = self.find_items(p_date = p_filedate, p_pid = p_pid, p_mimetype = mimetype)
+        deleted = []
+        for item in items:
+            fname = item['name']
+            fid = item['id']
+            fdate = item['modifiedTime']
+            ftype = get_filetype(fname)[1:]
+            if self.mime or ftype == p_filetype:
+                if self.test:
+                    result = f"Testing: Would have deleted file '{fname}' with date: {fdate}"
+                else:
+                    response = self.service.delete(fileId = fid).execute()
+                    result = f"delete response[{fname} @ {fdate}] = '{response}'."
+                self._lgr.info(result)
+                deleted.append(result)
+                if len(deleted) > MAX_FILES_DELETE:
+                    break
+        if self.save and items:
+            jfile = save_to_json(get_base_filename(argv[0]), items)
+            self._lgr.info(f"Saved results to '{jfile}'.")
+        return deleted
 
-        self._lgr.info(result)
-        return result
-
-    def get_old_files(self, p_date:str, p_pid:str, p_parent:str):
-        """retrieve files in the specified parent folder that are older than the specified date"""
-        # could include 'mimeType=x' in the query but some file types in Google Drive RARELY have the proper mimetype assigned
-        query = f"modifiedTime < '{p_date}' and '{p_pid}' in parents"
-        self._lgr.info(f"query: [{query}]")
-        results = self.service.list(q = query, spaces = "drive", pageSize = MAX_FILES_DELETE,
-                                     fields = "files(name, id, parents, mimeType, modifiedTime)").execute()
-        items = results.get("files", [])
-        if items:
-            self._lgr.debug(f"Files retrieved: \n\t\t\t\t\t\t\t\t Name \t\t\t\t <type> \t\t\t\t %Timestamp% \t\t\t\t (Id) \t\t\t\t\t [parent id]")
-            for item in items:
-                # n.b. items 'shared with me' are in my Drive but WITHOUT a parent
-                self._lgr.debug(f"{item['name']} <{item['mimeType']}> %{item['modifiedTime']}% ({item['id']}) "
-                          f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
-            self._lgr.info(f">> found {len(items)} files older than '{p_date}' in folder '{p_parent}'.\n")
-        else:
-            self._lgr.warning("No files found?!")
-
-        return items
-
-    def send_folder(self, p_path:str, p_pid:str, p_parent:str, p_wild:str = '*'):
-        """SEND the files in a folder to my Google drive."""
+    def send_folder(self, p_path:str, p_pid:str, p_parent:str):
+        """SEND all the files in a local folder to my Google drive."""
         self._lgr.debug(get_current_time())
         if not self.service:
             self._lgr.warning("No Session!")
             return
-        num_sent = 0
+        responses = []
         try:
-            fgw = glob.glob(p_path + osp.sep + p_wild)
+            fgw = glob.glob(p_path + osp.sep + '*')
             for item in fgw:
                 if osp.isfile(item):
-                    self.send_file(item, p_pid, p_parent)
-                    num_sent += 1
+                    reply = self.send_file(item, p_pid, p_parent)
+                    if reply:
+                        responses.append(reply)
         except Exception as sfdex:
             raise sfdex
-
-        self._lgr.info(f"Sent {num_sent} files to folder '{p_parent}'.")
+        return responses
 
     def send_file(self, p_path:str, p_pid:str, p_parent:str) -> str:
-        """SEND a file to my Google drive
+        """SEND a local file to my Google drive
         :return server response """
         if not self.service:
             self._lgr.warning("No Session!")
@@ -182,19 +174,17 @@ class MhsDriveAccess:
             self._lgr.info(f"Success: Google Id = {response}")
         except Exception as sfex:
             raise sfex
-
         return response
 
     def get_file_metadata(self, p_filename:str, p_file_id:str):
         file_metadata = self.service.get(fileId = p_file_id).execute()
         self._lgr.info(f"file '{p_filename}' metadata:")
-        for item in file_metadata:
-            self._lgr.info(f"\t{item}: {file_metadata[item]}")
+        return file_metadata
 
-    def read_file_info(self, p_ftype:str, p_numitems:int, p_mime:bool, p_save:bool):
+    def read_file_info(self, p_ftype:str, p_numitems:int):
         """Read file info from my Google drive."""
-        mime = FILE_MIME_TYPES[p_ftype] if p_mime else ""
-        fdate = "" if p_mime else DEFAULT_DATE
+        mime = FILE_MIME_TYPES[p_ftype] if self.mime else ""
+        fdate = "" if self.mime else DEFAULT_DATE
         items = self.find_items(p_mimetype = mime, p_date = fdate)
         found_items = []
         if not items:
@@ -202,7 +192,7 @@ class MhsDriveAccess:
             return
         self._lgr.info(f"{len(items)} files retrieved. \n\t\t\t\tName \t\t  <type> \t(Id) \t\t\t\t   [parent id]")
         for item in items:
-            if p_mime:
+            if self.mime:
                 # all the files are of the queried mimeType
                 found_items.append(item)
                 # items 'shared with me' are in my Drive but without a parent
@@ -219,9 +209,7 @@ class MhsDriveAccess:
             if len(found_items) > p_numitems:
                 break
         self._lgr.info(f">> {len(found_items)} '{p_ftype}' files found.\n")
-        if p_save and found_items:
-            jfile = save_to_json(get_base_filename(argv[0]), found_items)
-            self._lgr.info(f"Saved results to '{jfile}'.")
+        return found_items
 
     def find_items(self, p_mimetype:str= "", p_date:str= "", p_pid:str= "", p_limit:int=0) -> list:
         """Find the specified items on my Google drive."""
@@ -260,13 +248,11 @@ class MhsDriveAccess:
             raise ffex
         return all_items
 
-    def find_all_folders(self, save_option:bool):
+    def find_all_folders(self):
         """Find ALL the folders on my Google drive."""
         folders = self.find_items(p_mimetype = FILE_MIME_TYPES["gfldr"])
         self._lgr.info(f">> Found {len(folders)} folders.\n")
-        if save_option and folders:
-            jfile = save_to_json(get_base_filename(argv[0]), folders)
-            self._lgr.info(f"Saved results to '{jfile}'.")
+        return folders
 # END class MhsDriveAccess
 
 
@@ -291,9 +277,9 @@ def prepare_args():
     common_group.add_argument('-j', '--jsonsave', action="store_true", default=False,
                               help = "Write the results to a JSON file")
     common_group.add_argument("-l", "--log_location", metavar = "PATHNAME", default = DEFAULT_LOG_FOLDER,
-                              help = f"path to a local folder where logs will be saved; DEFAULT = {DEFAULT_LOG_FOLDER}")
-    common_group.add_argument('-p', '--parent', type = str, default = "root",
-                              help = "name of the Drive parent folder to use; DEFAULT = 'root'")
+                              help = f"path to a local folder where logs will be saved; DEFAULT = '{DEFAULT_LOG_FOLDER}'")
+    common_group.add_argument('-p', '--parent', type = str, default = f"{ROOT_LABEL}",
+                              help = f"name of the Drive parent folder to use; DEFAULT = '{ROOT_LABEL}'")
     common_group.add_argument('-t', '--type', type=str, default=f"{DEFAULT_FILETYPE}",
                               help = f"type of file to gather info on; DEFAULT = '{DEFAULT_FILETYPE}'")
     common_group.add_argument('-y', '--mimetype', action="store_true", default=False,
@@ -342,51 +328,44 @@ def main_drive_functions(args:list):
     start_time = dt.now()
     save_option, choice, parent, pid, filetype, mime_option, numfiles, meta_id, logloc, fdate, test_option = process_args(args)
     log_control = MhsLogger( get_base_filename(__file__), folder = logloc, con_level = DEFAULT_LOG_LEVEL )
-    # log_control.info(f"save option = {save_option}, choice = '{choice}', log location = {logloc}")
+    log_control.info(f"save option = {save_option}; choice = '{choice}'; log location = {logloc}; "
+                     f"mime option = {mime_option}; test option = {test_option}")
     lgr = log_control.get_logger()
     lgr.info(f"Start time = {start_time.strftime(RUN_DATETIME_FORMAT)}")
     mhsda = None
     code = 0
     try:
-        mhsda = MhsDriveAccess(lgr)
-        mhsda.begin_session()
+        mhsda = MhsDriveAccess(save_option, mime_option, test_option, lgr)
         # list all folders
         if choice == FOLDERS_LABEL:
             lgr.info(f"find all my {FOLDERS_LABEL}:")
-            mhsda.find_all_folders(save_option)
+            result = mhsda.find_all_folders()
         # get files
         elif choice == GET_FILES_LABEL:
             if mime_option:
                 lgr.info(f"retrieve info from up to {numfiles} 'mimeType = {FILE_MIME_TYPES[filetype]}' files.")
             else:
                 lgr.info(f"retrieve info from {numfiles} files and search for filename extension '{filetype}'.")
-            mhsda.read_file_info(filetype, numfiles, mime_option, save_option)
-        # get files
+            result = mhsda.read_file_info(filetype, numfiles)
+        # delete files
         elif choice == DELETE_FILES_LABEL:
-            deletes = []
-            files_to_delete = mhsda.get_old_files(fdate, pid, parent)
-            for item in files_to_delete:
-                fname = item["name"]
-                # find the file type by using the filename extension
-                ftype = get_filetype(fname)[1:]
-                if ftype == filetype:
-                    result = mhsda.delete_file(fname, item["id"], item["modifiedTime"], test_option)
-                    deletes.append(result)
-            if save_option and deletes:
-                jfile = save_to_json(get_base_filename(argv[0]), deletes)
-                lgr.info(f"Saved results to '{jfile}'.")
+            lgr.info("Delete files.")
+            result = mhsda.delete_files(pid, filetype, fdate)
         # get file metadata
-        elif choice == "metadata":
+        elif choice == METADATA_LABEL:
             lgr.info("get metadata for a file.")
-            mhsda.get_file_metadata("Budget-qtrly.gsht", meta_id)
+            result = mhsda.get_file_metadata("Budget-qtrly.gsht", meta_id)
         # send all files in a folder
         elif osp.isdir(choice):
             lgr.info(f"upload all files in folder '{choice}' to Drive folder: {parent}")
-            mhsda.send_folder(choice, pid, parent)
+            result = mhsda.send_folder(choice, pid, parent)
         # send a file
         else:
             lgr.info(f"upload file '{choice}' to Drive folder: {parent}")
-            mhsda.send_file(choice, pid, parent)
+            result = mhsda.send_file(choice, pid, parent)
+        if mhsda.save and result:
+            jfile = save_to_json(get_base_filename(argv[0]), result)
+            lgr.info(f"Saved results to '{jfile}'.")
     except KeyboardInterrupt as mki:
         if lgr: lgr.exception(mki)
         code = 13

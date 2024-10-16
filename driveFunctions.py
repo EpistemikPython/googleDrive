@@ -14,7 +14,7 @@ __python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.149.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2021-05-14"
-__updated__ = "2024-10-15"
+__updated__ = "2024-10-16"
 
 from sys import argv, path
 import os
@@ -112,6 +112,7 @@ class MhsDriveAccess:
             self._lock.release()
             self._lgr.info(f"released Drive lock at: {get_current_time()}")
 
+    # TODO: change all the log functions to logl and pass the default level to the class
     def find_items(self, p_mimetype:str= "", p_date:str= "", p_pid:str= "", p_limit:int=0) -> list:
         """Find the specified items on my Google drive."""
         if not self.service:
@@ -142,7 +143,7 @@ class MhsDriveAccess:
                 all_items = all_items + items if all_items else items
                 self._lgr.debug(f"type(items) = {type(items)} \n page_token = {page_token}")
                 page_token = results.get("nextPageToken", None)
-                if page_token is None or len(all_items) > limit:
+                if page_token is None or len(all_items) >= limit:
                     break
             self._lgr.debug(f">> Found {len(all_items)} items.\n")
         except Exception as ffex:
@@ -169,7 +170,7 @@ class MhsDriveAccess:
                     result = f"delete response[{fname} @ {fdate}] = '{response}'."
                 self._lgr.debug(result)
                 deleted.append(result)
-                if len(deleted) > MAX_FILES_DELETE:
+                if len(deleted) >= MAX_FILES_DELETE:
                     break
         if self.save and items:
             jfile = save_to_json(get_base_filename(argv[0]), items)
@@ -229,7 +230,8 @@ class MhsDriveAccess:
             return []
         mime = FILE_MIME_TYPES[p_ftype] if self.mime else ""
         fdate = "" if self.mime else DEFAULT_DATE
-        items = self.find_items(p_mimetype = mime, p_date = fdate)
+        limit = p_numitems if self.mime else DEFAULT_NUM_FILES
+        items = self.find_items(p_mimetype = mime, p_date = fdate, p_limit = limit)
         found_items = []
         if not items:
             self._lgr.warning("No files found?!")
@@ -250,9 +252,9 @@ class MhsDriveAccess:
                     found_items.append(item)
                     self._lgr.debug(f"{item['name']} <{item['mimeType']}> ({item['id']}) "
                                     f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
-            if len(found_items) > p_numitems:
+            if len(found_items) >= p_numitems:
                 break
-        self._lgr.info(f">> {len(found_items)} '{p_ftype}' files found.\n")
+        self._lgr.debug(f">> {len(found_items)} '{p_ftype}' files found.\n")
         return found_items
 
     def find_all_folders(self):

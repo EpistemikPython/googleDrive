@@ -11,7 +11,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __pyQt_version__   = "6.8"
 __created__ = "2024-10-11"
-__updated__ = "2024-10-16"
+__updated__ = "2024-10-17"
 
 from sys import path
 from PySide6.QtWidgets import (QApplication, QComboBox, QVBoxLayout, QGroupBox, QDialog, QFileDialog, QLabel, QCheckBox,
@@ -47,7 +47,7 @@ class DriveFunctionsUI(QDialog):
         self.title = "Drive Functions UI"
         self.left = 42
         self.top = 64
-        self.width = 440
+        self.width = 560
         self.height = 800
         self._lgr = log_control.get_logger()
 
@@ -83,12 +83,12 @@ class DriveFunctionsUI(QDialog):
         # choose a function
         self.fxn_keys = list(FUNCTIONS.keys())
         self.selected_function = self.fxn_keys[0]
-        self.combx_fxn = QComboBox()
-        self.combx_fxn.addItems(self.fxn_keys)
-        self.combx_fxn.currentIndexChanged.connect(self.fxn_change)
+        self.combox_fxn = QComboBox()
+        self.combox_fxn.addItems(self.fxn_keys)
+        self.combox_fxn.currentIndexChanged.connect(self.fxn_change)
         self.lbl_fxn = QLabel("Function to run:")
         self.lbl_fxn.setStyleSheet("QLabel {font-weight: bold;}")
-        gblayout.addRow(self.lbl_fxn, self.combx_fxn)
+        gblayout.addRow(self.lbl_fxn, self.combox_fxn)
 
         # local file or folder
         self.fsend_title = "Get local file or folder"
@@ -117,11 +117,11 @@ class DriveFunctionsUI(QDialog):
         self.pb_filetype.clicked.connect(self.get_filetype)
         gblayout.addRow(QLabel(self.ft_label), self.pb_filetype)
 
-        # date of file
+        # target date for deletions
         self.de_date = QDateEdit(DEFAULT_QDATE, self)
         self.de_date.setMinimumDate(QDate(1970,1,1))
         self.de_date.setMaximumDate(QDate(2099,12,31))
-        self.dt_selected = DEFAULT_QDATE
+        self.dt_selected = DEFAULT_DATE
         self.dt_label = "Files older than:"
         self.de_date.userDateChanged.connect(self.get_date)
         gblayout.addRow(QLabel(self.dt_label), self.de_date)
@@ -161,7 +161,7 @@ class DriveFunctionsUI(QDialog):
         self.fxn_change()
 
     def fxn_change(self):
-        self.selected_function = self.combx_fxn.currentText()
+        self.selected_function = self.combox_fxn.currentText()
         sf = self.selected_function
         self._lgr.info(f"selected function changed to '{sf}'")
         if sf == self.fxn_keys[3] or sf == self.fxn_keys[2]: # send file or folder | option: drive folder to send to
@@ -183,6 +183,7 @@ class DriveFunctionsUI(QDialog):
             # self.chbx_mime.setStyleSheet("")
             self.chbx_test.hide()
             # self.chbx_test.setStyleSheet("")
+            self.de_date.hide()
         elif sf == self.fxn_keys[4]: # metadata | option: name of file to query
             self.pb_drive_option.show()
             self.pb_drive_option.setText(REQD_LABEL+self.do_file_title)
@@ -200,6 +201,7 @@ class DriveFunctionsUI(QDialog):
             # self.chbx_mime.setStyleSheet("")
             self.chbx_test.hide()
             # self.chbx_test.setStyleSheet("")
+            self.de_date.hide()
         elif sf == self.fxn_keys[5]: # delete | options: drive folder, file type, file date, num files, test mode
             self.pb_drive_option.show()
             self.pb_drive_option.setText(OPTION_LABEL+self.do_folder_title)
@@ -207,9 +209,10 @@ class DriveFunctionsUI(QDialog):
             self.pb_filetype.show()
             self.pb_filetype.setText(REQD_LABEL+self.ft_title)
             self.pb_filetype.setStyleSheet("QPushButton {font-weight: bold; color: red; background-color: cyan;}")
-            self.pb_numfiles.show()
-            self.pb_numfiles.setText(OPTION_LABEL+NUMFILES_LABEL)
+            self.pb_numfiles.hide()
+            # self.pb_numfiles.setText(OPTION_LABEL+NUMFILES_LABEL)
             # self.pb_numfiles.setStyleSheet("QPushButton {font-weight: bold; color: green;}")
+            self.de_date.show()
             self.chbx_mime.show()
             self.chbx_test.show()
             self.pb_fsend.hide()
@@ -235,6 +238,7 @@ class DriveFunctionsUI(QDialog):
             # self.pb_drive_option.setStyleSheet("")
             self.chbx_test.hide()
             # self.chbx_test.setStyleSheet("")
+            self.de_date.hide()
         elif sf == self.fxn_keys[0]: # get all folders | NO options
             self.pb_drive_option.hide()
             # self.pb_drive_option.setText(NO_NEED)
@@ -252,13 +256,14 @@ class DriveFunctionsUI(QDialog):
             # self.chbx_mime.setStyleSheet("")
             self.chbx_test.hide()
             # self.chbx_test.setStyleSheet("")
+            self.de_date.hide()
         else:
             raise Exception("?? INVALID Function Choice??!!")
 
     def open_file_name_dialog(self, label:str):
         self._lgr.info(label)
         f_dir = HOME_FOLDER
-        if self.combx_fxn.currentText() == self.fxn_keys[3]:
+        if self.combox_fxn.currentText() == self.fxn_keys[3]:
             f_name, _ = QFileDialog.getOpenFileName(caption = "Get File", filter = f"{FILE_LABEL}: All Files (*)",
                                                     dir = f_dir, options = QFileDialog.Option.DontUseNativeDialog)
         else: # folder
@@ -273,7 +278,7 @@ class DriveFunctionsUI(QDialog):
 
     def get_drive_option(self):
         fct = self.selected_function
-        if fct == self.fxn_keys[3] or fct == self.fxn_keys[2]:
+        if fct == self.fxn_keys[3] or fct == self.fxn_keys[2] or fct == self.fxn_keys[5]:
             dtitle = "Drive Folder"
             dlabel = "Enter the name of the Drive folder to search (default = root)"
         elif fct == self.fxn_keys[4]:
@@ -299,7 +304,7 @@ class DriveFunctionsUI(QDialog):
             self.pb_filetype.setText(f"{self.ft_title} = {ft_choice}")
 
     def get_date(self):
-        self.dt_selected = self.de_date.date()
+        self.dt_selected = self.de_date.date().toString(Qt.DateFormat.ISODate)
         self._lgr.info(f"Date selected = '{self.dt_selected}'.")
 
     def get_num_files(self):
@@ -327,9 +332,10 @@ class DriveFunctionsUI(QDialog):
         mhsda = None
         exe = FUNCTIONS[sf]
         try:
-            mhsda = MhsDriveAccess(self.chbx_save.isChecked(), self.chbx_mime.isChecked(), self.chbx_test.isChecked(), self._lgr)
+            self._lgr.info(f"save = {self.chbx_save.isChecked()}; mime = {self.chbx_mime.isChecked()}; test = {self.chbx_test.isChecked()}")
+            mhsda = MhsDriveAccess(self.chbx_save.isChecked(), self.chbx_mime.isChecked(), self.chbx_test.isChecked(), log_control)
             mhsda.begin_session()
-            # if sf == self.fxn_keys[3] or sf == self.fxn_keys[2] or sf == self.fxn_keys[4]:
+            self._lgr.info(repr(mhsda))
             if sf == self.fxn_keys[3] or sf == self.fxn_keys[2]: # send file or folder
                 if self.forf_selected is None:
                     msg_box = QMessageBox()
@@ -338,12 +344,16 @@ class DriveFunctionsUI(QDialog):
                     msg_box.exec()
                     mhsda.end_session()
                     return
+                self._lgr.info(f"file/folder = {self.forf_selected}; drive folder = {self.drive_folder}")
                 reply = exe(mhsda, self.forf_selected, FOLDER_IDS[self.drive_folder], self.drive_folder)
             elif sf == self.fxn_keys[4]: # metadata
+                self._lgr.info(f"meta file = {self.meta_filename}")
                 reply = exe(mhsda, self.meta_filename, FILE_IDS[self.meta_filename])
             elif sf == self.fxn_keys[5]: # delete
+                self._lgr.info(f"drive folder = {self.drive_folder}; file type = {self.ft_selected}; date = {self.dt_selected}")
                 reply = exe(mhsda, FOLDER_IDS[self.drive_folder], self.ft_selected, self.dt_selected)
             elif sf == self.fxn_keys[1]: # get files
+                self._lgr.info(f"file type = {self.ft_selected}; num files = {self.num_files}")
                 reply = exe(mhsda, self.ft_selected, self.num_files)
             elif sf == self.fxn_keys[0]: # get all folders
                 reply = exe(mhsda)

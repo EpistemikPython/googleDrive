@@ -14,7 +14,7 @@ __python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.149.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2021-05-14"
-__updated__ = "2024-10-16"
+__updated__ = "2024-10-17"
 
 from sys import argv, path
 import os
@@ -47,10 +47,10 @@ DRIVE_ACCESS_SCOPE:list = ["https://www.googleapis.com/auth/drive"]
 DEFAULT_FILETYPE      = "txt"
 DEFAULT_DATE          = "2027-11-13"
 DEFAULT_METADATA_FILE = "Budget-qtrly.gsht"
-TEST_FOLDER       = "Test"
-MAX_FILES_DELETE  = 500
-DEFAULT_NUM_FILES = 100
-MAX_NUM_ITEMS     = 5000
+TEST_FOLDER        = "Test"
+MAX_FILES_DELETE   = 500
+DEFAULT_NUM_FILES  = 100
+MAX_NUM_ITEMS      = 3000
 ROOT_LABEL:str     = "root"
 FOLDERS_LABEL      = "folders"
 GET_FILES_LABEL    = "getfiles"
@@ -87,21 +87,22 @@ def get_credentials(p_lgr:logging.Logger):
 
 class MhsDriveAccess:
     """Start a locked session, read/write to my google drive, end the session."""
-    def __init__(self, p_save:bool, p_mime:bool, p_test:bool, p_logger:logging.Logger):
+    def __init__(self, p_save:bool, p_mime:bool, p_test:bool, p_lgctrl:MhsLogger, p_level:int = DEFAULT_LOG_LEVEL):
         self.save = p_save
         self.mime = p_mime
         self.test = p_test
-        self._lgr = p_logger
+        self.lgr = p_lgctrl.get_logger()
+        self.lev = p_level
         # prevent different instances/threads from writing at the same time
         self._lock = threading.Lock()
-        self._lgr.info(f"Launch '{self.__class__.__name__}' instance at: {get_current_time()}")
+        self.lgr.info(f"Launch '{self.__class__.__name__}' instance at: {get_current_time()}")
         self.service = None
 
     def begin_session(self):
         """Activate a UNIQUE session to the drive."""
         self._lock.acquire()
-        self._lgr.info(f"acquired Drive lock at: {get_current_time()}")
-        creds = get_credentials(self._lgr)
+        self.lgr.info(f"acquired Drive lock at: {get_current_time()}")
+        creds = get_credentials(self.lgr)
         service = build("drive", "v3", credentials = creds)
         self.service = service.files()
 
@@ -110,13 +111,12 @@ class MhsDriveAccess:
         self.service = None
         if self._lock and self._lock.locked():
             self._lock.release()
-            self._lgr.info(f"released Drive lock at: {get_current_time()}")
+            self.lgr.info(f"released Drive lock at: {get_current_time()}")
 
-    # TODO: change all the log functions to logl and pass the default level to the class
     def find_items(self, p_mimetype:str= "", p_date:str= "", p_pid:str= "", p_limit:int=0) -> list:
         """Find the specified items on my Google drive."""
         if not self.service:
-            self._lgr.warning("No Session!")
+            self.lgr.warning("No Session!")
             return []
 
         iquery = None
@@ -127,11 +127,11 @@ class MhsDriveAccess:
         if p_pid:
             iquery = f"{iquery} and '{p_pid}' in parents" if iquery else f"'{p_pid}' in parents"
         if not iquery:
-            self._lgr.warning("No Query parameters!")
+            self.lgr.warning("No Query parameters!")
             return []
 
         limit = p_limit if p_limit else MAX_NUM_ITEMS
-        self._lgr.debug(f"query = '{iquery}'; limit = '{limit}'")
+        self.lgr.log(self.lev, f"query = '{iquery}'; limit = '{limit}'")
         try:
             page_token = None
             all_items = []
@@ -141,22 +141,22 @@ class MhsDriveAccess:
                                              pageToken = page_token ).execute()
                 items = results.get("files", [])
                 all_items = all_items + items if all_items else items
-                self._lgr.debug(f"type(items) = {type(items)} \n page_token = {page_token}")
+                self.lgr.log(self.lev, f"type(items) = {type(items)} \n page_token = {page_token}")
                 page_token = results.get("nextPageToken", None)
                 if page_token is None or len(all_items) >= limit:
                     break
-            self._lgr.debug(f">> Found {len(all_items)} items.\n")
+            self.lgr.log(self.lev, f">> Found {len(all_items)} items.\n")
         except Exception as ffex:
             raise ffex
         return all_items
 
     def delete_files(self, p_pid:str, p_filetype:str, p_filedate:str):
         if not self.service:
-            self._lgr.warning("No Session!")
+            self.lgr.warning("No Session!")
             return []
         mimetype = FILE_MIME_TYPES[p_filetype] if self.mime else ""
         items = self.find_items(p_date = p_filedate, p_pid = p_pid, p_mimetype = mimetype)
-        deleted = []
+        results = []
         for item in items:
             fname = item['name']
             fid = item['id']
@@ -168,22 +168,22 @@ class MhsDriveAccess:
                 else:
                     response = self.service.delete(fileId = fid).execute()
                     result = f"delete response[{fname} @ {fdate}] = '{response}'."
-                self._lgr.debug(result)
-                deleted.append(result)
-                if len(deleted) >= MAX_FILES_DELETE:
+                self.lgr.log(self.lev, result)
+                results.append(result)
+                if len(results) >= MAX_FILES_DELETE:
                     break
-        if self.save and items:
-            jfile = save_to_json(get_base_filename(argv[0]), items)
-            self._lgr.debug(f"Saved results to '{jfile}'.")
-        return deleted
+        ftf = p_filetype if self.mime else f".{p_filetype}"
+        self.lgr.log(self.lev, f">> {len(results)} '{ftf}' files found.\n")
+        return results
 
     def send_folder(self, p_path:str, p_pid:str, p_parent:str):
         """SEND all the files in a local folder to my Google drive."""
         if not self.service:
-            self._lgr.warning("No Session!")
+            self.lgr.warning("No Session!")
             return []
         responses = []
         try:
+            self.lgr.log(self.lev, f"Sending folder '{p_path}' to Drive://{p_parent}/")
             fgw = glob.glob(p_path + osp.sep + '*')
             for item in fgw:
                 if osp.isfile(item):
@@ -197,8 +197,8 @@ class MhsDriveAccess:
     def send_file(self, p_path:str, p_pid:str, p_parent:str):
         """SEND a local file to my Google drive."""
         if not self.service:
-            self._lgr.warning("No Session!")
-            return []
+            self.lgr.warning("No Session!")
+            return
         try:
             mime_type = FILE_MIME_TYPES["txt"]
             f_type = get_filetype(p_path)
@@ -207,42 +207,42 @@ class MhsDriveAccess:
 
             file_metadata = {"name":get_filename(p_path), "parents":[p_pid]}
             media = MediaFileUpload(p_path, mimetype = mime_type, resumable = True)
-            self._lgr.debug(f"Sending file '{p_path}' to Drive://{p_parent}/")
+            self.lgr.log(self.lev, f"Sending file '{p_path}' to Drive://{p_parent}/")
             file = self.service.create(body = file_metadata, media_body = media, fields = "id").execute()
             response = file.get("id")
-            self._lgr.debug(f"Success: Google Id = {response}")
+            self.lgr.log(self.lev, f"Success: Google Id = {response}")
         except Exception as sfex:
             raise sfex
-        return [response]
+        return response
 
     def get_file_metadata(self, p_filename:str, p_file_id:str):
         if not self.service:
-            self._lgr.warning("No Session!")
+            self.lgr.warning("No Session!")
             return []
         file_metadata = self.service.get(fileId = p_file_id).execute()
-        self._lgr.debug(f"file '{p_filename}' metadata:")
+        self.lgr.log(self.lev, f"file '{p_filename}' metadata:\n{file_metadata}")
         return [file_metadata]
 
     def read_file_info(self, p_ftype:str, p_numitems:int):
         """Read file info from my Google drive."""
         if not self.service:
-            self._lgr.warning("No Session!")
+            self.lgr.warning("No Session!")
             return []
         mime = FILE_MIME_TYPES[p_ftype] if self.mime else ""
         fdate = "" if self.mime else DEFAULT_DATE
-        limit = p_numitems if self.mime else DEFAULT_NUM_FILES
+        limit = p_numitems if self.mime else MAX_NUM_ITEMS
         items = self.find_items(p_mimetype = mime, p_date = fdate, p_limit = limit)
         found_items = []
         if not items:
-            self._lgr.warning("No files found?!")
+            self.lgr.warning("No files found?!")
             return
-        self._lgr.debug(f"{len(items)} files retrieved. \n\t\t\t\tName \t\t  <type> \t(Id) \t\t\t\t   [parent id]")
+        self.lgr.log(self.lev, f"{len(items)} files retrieved. \n\t\t\t\tName \t\t  <type> \t(Id) \t\t\t\t   [parent id]")
         for item in items:
             if self.mime:
                 # all the files are of the queried mimeType
                 found_items.append(item)
                 # items 'shared with me' are in my Drive but without a parent
-                self._lgr.debug(f"{item['name']} <{item['mimeType']}> ({item['id']}) "
+                self.lgr.log(self.lev, f"{item['name']} <{item['mimeType']}> ({item['id']}) "
                                 f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
             else:
                 fname = f"{item['name']}"
@@ -250,17 +250,17 @@ class MhsDriveAccess:
                 ftype = get_filetype(fname)[1:]
                 if ftype == p_ftype:
                     found_items.append(item)
-                    self._lgr.debug(f"{item['name']} <{item['mimeType']}> ({item['id']}) "
+                    self.lgr.log(self.lev, f"{item['name']} <{item['mimeType']}> ({item['id']}) "
                                     f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
             if len(found_items) >= p_numitems:
                 break
-        self._lgr.debug(f">> {len(found_items)} '{p_ftype}' files found.\n")
+        self.lgr.log(self.lev, f">> {len(found_items)} '{p_ftype}' files found.\n")
         return found_items
 
     def find_all_folders(self):
         """Find ALL the folders on my Google drive."""
         folders = self.find_items(p_mimetype = FILE_MIME_TYPES["gfldr"])
-        self._lgr.debug(f">> Found {len(folders)} folders.\n")
+        self.lgr.log(self.lev, f">> Found {len(folders)} folders.\n")
         return folders
 # END class MhsDriveAccess
 
@@ -339,60 +339,61 @@ def main_drive_functions(args:list):
     log_control = MhsLogger( get_base_filename(__file__), folder = logloc, con_level = DEFAULT_LOG_LEVEL )
     log_control.info(f"save option = {save_option}; choice = '{choice}'; log location = {logloc}; "
                      f"mime option = {mime_option}; test option = {test_option}")
-    lgr = log_control.get_logger()
-    lgr.info(f"Start time = {start_time.strftime(RUN_DATETIME_FORMAT)}")
+    log_control.info(f"Start time = {start_time.strftime(RUN_DATETIME_FORMAT)}")
     mhsda = None
+    result = []
     code = 0
     try:
-        mhsda = MhsDriveAccess(save_option, mime_option, test_option, lgr)
+        mhsda = MhsDriveAccess(save_option, mime_option, test_option, log_control)
         # list all folders
         if choice == FOLDERS_LABEL:
-            lgr.info(f"find all my {FOLDERS_LABEL}:")
+            log_control.info(f"find all my {FOLDERS_LABEL}:")
             result = mhsda.find_all_folders()
         # get files
         elif choice == GET_FILES_LABEL:
             if mime_option:
-                lgr.info(f"retrieve info from up to {numfiles} 'mimeType = {FILE_MIME_TYPES[filetype]}' files.")
+                log_control.info(f"retrieve info from up to {numfiles} 'mimeType = {FILE_MIME_TYPES[filetype]}' files.")
             else:
-                lgr.info(f"retrieve info from {numfiles} files and search for filename extension '{filetype}'.")
+                log_control.info(f"retrieve info from {numfiles} files and search for filename extension '{filetype}'.")
             result = mhsda.read_file_info(filetype, numfiles)
         # delete files
         elif choice == DELETE_FILES_LABEL:
-            lgr.info("Delete files.")
+            log_control.info("Delete files.")
             result = mhsda.delete_files(pid, filetype, fdate)
         # get file metadata
         elif choice == METADATA_LABEL:
-            lgr.info("get metadata for a file.")
+            log_control.info("get metadata for a file.")
             result = mhsda.get_file_metadata("Budget-qtrly.gsht", meta_id)
         # send all files in a folder
         elif osp.isdir(choice):
-            lgr.info(f"upload all files in folder '{choice}' to Drive folder: {parent}")
+            log_control.info(f"upload all files in folder '{choice}' to Drive folder: {parent}")
             result = mhsda.send_folder(choice, pid, parent)
         # send a file
         else:
-            lgr.info(f"upload file '{choice}' to Drive folder: {parent}")
+            log_control.info(f"upload file '{choice}' to Drive folder: {parent}")
             result = mhsda.send_file(choice, pid, parent)
-        if mhsda.save and result:
-            jfile = save_to_json(get_base_filename(argv[0]), result)
-            lgr.info(f"Saved results to '{jfile}'.")
     except KeyboardInterrupt as mki:
-        if lgr: lgr.exception(mki)
+        log_control.exception(mki)
         code = 13
     except ValueError as mve:
-        if lgr: lgr.exception(mve)
+        log_control.exception(mve)
         code = 27
     except HttpError as mghe:
-        if lgr: lgr.exception(mghe)
+        log_control.exception(mghe)
         code = 39
     except Exception as mex:
-        if lgr: lgr.exception(mex)
+        log_control.exception(mex)
         code = 66
     finally:
         if mhsda:
             mhsda.end_session()
 
+    if mhsda.save and result:
+        jfile = save_to_json(get_base_filename(argv[0]), result)
+        log_control.info(f"Saved results to '{jfile}'.")
+
     run_time = (dt.now() - start_time).total_seconds()
-    if lgr: lgr.info(f"\nRunning time = {(run_time // 60)} minutes, {(run_time % 60):2.4} seconds\n")
+    log_control.info(f"\nRunning time = {(run_time // 60)} minutes, {(run_time % 60):2.4} seconds\n")
 
     return code
 

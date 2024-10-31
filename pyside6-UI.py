@@ -94,21 +94,11 @@ class DriveFunctionsUI(QDialog):
         self.pb_fsend.clicked.connect(partial(self.open_file_name_dialog, self.fsend_title))
         gblayout.addRow(self.lbl_fsend, self.pb_fsend)
 
-        # Drive file or folder
-        # self.do_file_title = "Specify Drive file"
-        # self.do_folder_title = "Specify Drive folder"
-        # self.pb_drive_option = QPushButton()
-        # self.drive_folder = ROOT_LABEL
-        # self.meta_filename = DEFAULT_METADATA_FILE
-        # self.pb_drive_option.clicked.connect(self.get_drive_option)
-        # gblayout.addRow(QLabel("Drive option:"), self.pb_drive_option)
-
         # Drive Folder
         self.folder_keys = list(FOLDER_IDS.keys())
         self.drive_folder = self.folder_keys[0]
         self.combox_drive_folder = QComboBox()
         self.combox_drive_folder.addItems(self.folder_keys)
-        # self.combox_drive_folder.setStyleSheet(REQD_STYLE)
         self.combox_drive_folder.currentIndexChanged.connect(self.drive_change)
         self.lbl_drive_folder = QLabel("Drive Folder:")
         gblayout.addRow(self.lbl_drive_folder, self.combox_drive_folder)
@@ -118,7 +108,6 @@ class DriveFunctionsUI(QDialog):
         self.meta_filename = self.meta_keys[0]
         self.combox_meta_file = QComboBox()
         self.combox_meta_file.addItems(self.meta_keys)
-        # self.combox_meta_file.setStyleSheet(REQD_STYLE)
         self.combox_meta_file.currentIndexChanged.connect(self.meta_change)
         self.lbl_meta = QLabel("Metadata file:")
         gblayout.addRow(self.lbl_meta, self.combox_meta_file)
@@ -184,8 +173,6 @@ class DriveFunctionsUI(QDialog):
             self.pb_fsend.setStyleSheet(REQD_STYLE)
             self.combox_drive_folder.show()
             self.combox_meta_file.hide()
-            # self.pb_drive_option.setText(OPTION_LABEL+self.do_folder_title)
-            # self.pb_drive_option.setStyleSheet("")
             self.pb_numfiles.hide()
             self.pb_filetype.hide()
             self.chbx_mime.hide()
@@ -193,8 +180,6 @@ class DriveFunctionsUI(QDialog):
             self.de_date.hide()
         elif sf == self.fxn_keys[4]: # metadata | option: name of file to query
             self.combox_meta_file.show()
-            # self.pb_drive_option.setText(REQD_LABEL+self.do_file_title)
-            # self.pb_drive_option.setStyleSheet(REQD_STYLE)
             self.combox_drive_folder.hide()
             self.pb_fsend.hide()
             self.pb_numfiles.hide()
@@ -204,8 +189,6 @@ class DriveFunctionsUI(QDialog):
             self.de_date.hide()
         elif sf == self.fxn_keys[5]: # delete | options: drive folder, file type, file date, num files, test mode
             self.combox_drive_folder.show()
-            # self.pb_drive_option.setText(OPTION_LABEL+self.do_folder_title)
-            # self.pb_drive_option.setStyleSheet("")
             self.pb_filetype.show()
             self.pb_filetype.setText(REQD_LABEL+self.ft_title)
             self.pb_filetype.setStyleSheet(REQD_STYLE)
@@ -262,26 +245,6 @@ class DriveFunctionsUI(QDialog):
     def meta_change(self):
         self.meta_filename = self.combox_meta_file.currentText()
         self._lgr.info(f"Selected meta file changed to '{self.meta_filename}'")
-
-    # def get_drive_option(self):
-    #     fct = self.selected_function
-    #     if fct == self.fxn_keys[3] or fct == self.fxn_keys[2] or fct == self.fxn_keys[5]:
-    #         dtitle = "Drive Folder"
-    #         dlabel = "Enter the name of the Drive folder to search (default = root)"
-    #     elif fct == self.fxn_keys[4]:
-    #         dtitle = "Metadata Filename"
-    #         dlabel = f"Enter the name of the file to query (default = {self.meta_filename})"
-    #     else:
-    #         self._lgr.warning(f"?? INVALID function = '{fct}'")
-    #         return
-    #     d_choice, ok = QInputDialog.getText(self, dtitle, dlabel)
-    #     if ok:
-    #         self._lgr.info(f"Drive option changed to {d_choice}.")
-    #         if fct == self.fxn_keys[4]:
-    #             self.meta_filename = d_choice
-    #         else:
-    #             self.drive_folder = d_choice
-    #         self.pb_drive_option.setText(f"{dtitle}: {d_choice}")
 
     def get_filetype(self):
         ft_choice, ok = QInputDialog.getText(self, self.ft_title, FILETYPE_LABEL)

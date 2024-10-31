@@ -14,7 +14,7 @@ __python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.149.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2021-05-14"
-__updated__ = "2024-10-17"
+__updated__ = "2024-10-22"
 
 from sys import argv, path
 import os
@@ -114,7 +114,12 @@ class MhsDriveAccess:
             self.lgr.info(f"released Drive lock at: {get_current_time()}")
 
     def find_items(self, p_mimetype:str= "", p_date:str= "", p_pid:str= "", p_limit:int=0) -> list:
-        """Find the specified items on my Google drive."""
+        """Find the specified items on my Google drive.
+        :param p_mimetype: mimeType of files to retrieve
+        :param p_date: find files OLDER than this date
+        :param p_pid:  id of the parent Drive folder to search in
+        :param p_limit: number of items to retrieve
+        """
         if not self.service:
             self.lgr.warning("No Session!")
             return []
@@ -151,6 +156,12 @@ class MhsDriveAccess:
         return all_items
 
     def delete_files(self, p_pid:str, p_filetype:str, p_filedate:str):
+        """
+        :param p_pid: id of the parent folder on the drive, i.e. the folder to delete files from
+        :param p_filetype: type of file to find
+        :param p_filedate: find files OLDER than this date
+        :return: list of results
+        """
         if not self.service:
             self.lgr.warning("No Session!")
             return []
@@ -177,7 +188,11 @@ class MhsDriveAccess:
         return results
 
     def send_folder(self, p_path:str, p_pid:str, p_parent:str):
-        """SEND all the files in a local folder to my Google drive."""
+        """SEND all the files in a local folder to my Google drive.
+        :param p_path: path to the local folder to send files from
+        :param p_pid:  id of the parent folder on the drive to send the files to
+        :param p_parent: name of the parent folder on the drive
+        """
         if not self.service:
             self.lgr.warning("No Session!")
             return []
@@ -190,15 +205,19 @@ class MhsDriveAccess:
                     reply = self.send_file(item, p_pid, p_parent)
                     if reply:
                         responses.append(reply)
-        except Exception as sfdex:
-            raise sfdex
+        except Exception as sdex:
+            raise sdex
         return responses
 
     def send_file(self, p_path:str, p_pid:str, p_parent:str):
-        """SEND a local file to my Google drive."""
+        """SEND a local file to my Google drive.
+        :param p_path: path to the local folder to send files from
+        :param p_pid:  id of the parent folder on the drive to send the files to
+        :param p_parent: name of the parent folder on the drive
+        """
         if not self.service:
             self.lgr.warning("No Session!")
-            return
+            return []
         try:
             mime_type = FILE_MIME_TYPES["txt"]
             f_type = get_filetype(p_path)
@@ -213,9 +232,14 @@ class MhsDriveAccess:
             self.lgr.log(self.lev, f"Success: Google Id = {response}")
         except Exception as sfex:
             raise sfex
-        return response
+        return [response]
 
     def get_file_metadata(self, p_filename:str, p_file_id:str):
+        """
+        :param p_filename: name of the Drive file to get info from
+        :param p_file_id:  id of the Drive file to get info from
+        :return: the obtained metadata
+        """
         if not self.service:
             self.lgr.warning("No Session!")
             return []
@@ -224,7 +248,10 @@ class MhsDriveAccess:
         return [file_metadata]
 
     def read_file_info(self, p_ftype:str, p_numitems:int):
-        """Read file info from my Google drive."""
+        """Read file info from my Google drive.
+        :param p_ftype: type of file to get info on
+        :param p_numitems: number of files to get
+        """
         if not self.service:
             self.lgr.warning("No Session!")
             return []

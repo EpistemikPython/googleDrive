@@ -14,7 +14,7 @@ __python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.149.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2021-05-14"
-__updated__ = "2024-10-22"
+__updated__ = "2024-10-31"
 
 from sys import argv, path
 import os
@@ -50,12 +50,13 @@ DEFAULT_METADATA_FILE = "Budget-qtrly.gsht"
 TEST_FOLDER        = "Test"
 MAX_FILES_DELETE   = 500
 DEFAULT_NUM_FILES  = 100
-MAX_NUM_ITEMS      = 3000
+MAX_NUM_ITEMS      = 800
 ROOT_LABEL:str     = "root"
 FOLDERS_LABEL      = "folders"
 GET_FILES_LABEL    = "getfiles"
 DELETE_FILES_LABEL = "deletefiles"
 METADATA_LABEL     = "metadata"
+NO_SESSION_MSG     = "No Session!"
 
 # see https://github.com/googleapis/google-api-python-client/issues/299
 lg.getLogger("googleapiclient.discovery_cache").setLevel(lg.ERROR)
@@ -121,9 +122,8 @@ class MhsDriveAccess:
         :param p_limit: number of items to retrieve
         """
         if not self.service:
-            self.lgr.warning("No Session!")
-            return []
-
+            self.lgr.warning(NO_SESSION_MSG)
+            return [NO_SESSION_MSG]
         iquery = None
         if p_mimetype:
             iquery = f"mimeType='{p_mimetype}'"
@@ -163,8 +163,8 @@ class MhsDriveAccess:
         :return: list of results
         """
         if not self.service:
-            self.lgr.warning("No Session!")
-            return []
+            self.lgr.warning(NO_SESSION_MSG)
+            return [NO_SESSION_MSG]
         mimetype = FILE_MIME_TYPES[p_filetype] if self.mime else ""
         items = self.find_items(p_date = p_filedate, p_pid = p_pid, p_mimetype = mimetype)
         results = []
@@ -184,7 +184,11 @@ class MhsDriveAccess:
                 if len(results) >= MAX_FILES_DELETE:
                     break
         ftf = p_filetype if self.mime else f".{p_filetype}"
-        self.lgr.log(self.lev, f">> {len(results)} '{ftf}' files found.\n")
+        num_results = len(results)
+        results_msg = f">> {num_results} '{ftf}' files found.\n"
+        if num_results == 0:
+            results.append(results_msg)
+        self.lgr.log(self.lev, results_msg)
         return results
 
     def send_folder(self, p_path:str, p_pid:str, p_parent:str):
@@ -194,8 +198,8 @@ class MhsDriveAccess:
         :param p_parent: name of the parent folder on the drive
         """
         if not self.service:
-            self.lgr.warning("No Session!")
-            return []
+            self.lgr.warning(NO_SESSION_MSG)
+            return [NO_SESSION_MSG]
         responses = []
         try:
             self.lgr.log(self.lev, f"Sending folder '{p_path}' to Drive://{p_parent}/")
@@ -216,8 +220,8 @@ class MhsDriveAccess:
         :param p_parent: name of the parent folder on the drive
         """
         if not self.service:
-            self.lgr.warning("No Session!")
-            return []
+            self.lgr.warning(NO_SESSION_MSG)
+            return [NO_SESSION_MSG]
         try:
             mime_type = FILE_MIME_TYPES["txt"]
             f_type = get_filetype(p_path)
@@ -241,8 +245,8 @@ class MhsDriveAccess:
         :return: the obtained metadata
         """
         if not self.service:
-            self.lgr.warning("No Session!")
-            return []
+            self.lgr.warning(NO_SESSION_MSG)
+            return [NO_SESSION_MSG]
         file_metadata = self.service.get(fileId = p_file_id).execute()
         self.lgr.log(self.lev, f"file '{p_filename}' metadata:\n{file_metadata}")
         return [file_metadata]
@@ -253,17 +257,17 @@ class MhsDriveAccess:
         :param p_numitems: number of files to get
         """
         if not self.service:
-            self.lgr.warning("No Session!")
-            return []
+            self.lgr.warning(NO_SESSION_MSG)
+            return [NO_SESSION_MSG]
         mime = FILE_MIME_TYPES[p_ftype] if self.mime else ""
         fdate = "" if self.mime else DEFAULT_DATE
         limit = p_numitems if self.mime else MAX_NUM_ITEMS
         items = self.find_items(p_mimetype = mime, p_date = fdate, p_limit = limit)
-        found_items = []
         if not items:
             self.lgr.warning("No files found?!")
-            return
+            return ["No files found?!"]
         self.lgr.log(self.lev, f"{len(items)} files retrieved. \n\t\t\t\tName \t\t  <type> \t(Id) \t\t\t\t   [parent id]")
+        found_items = []
         for item in items:
             if self.mime:
                 # all the files are of the queried mimeType
@@ -286,6 +290,9 @@ class MhsDriveAccess:
 
     def find_all_folders(self):
         """Find ALL the folders on my Google drive."""
+        if not self.service:
+            self.lgr.warning(NO_SESSION_MSG)
+            return [NO_SESSION_MSG]
         folders = self.find_items(p_mimetype = FILE_MIME_TYPES["gfldr"])
         self.lgr.log(self.lev, f">> Found {len(folders)} folders.\n")
         return folders

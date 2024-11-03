@@ -14,7 +14,7 @@ __python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.149.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2021-05-14"
-__updated__ = "2024-10-31"
+__updated__ = "2024-11-01"
 
 from sys import argv, path
 import os
@@ -48,15 +48,15 @@ DEFAULT_FILETYPE      = "txt"
 DEFAULT_DATE          = "2027-11-13"
 DEFAULT_METADATA_FILE = "Budget-qtrly.gsht"
 TEST_FOLDER        = "Test"
-MAX_FILES_DELETE   = 500
-DEFAULT_NUM_FILES  = 100
-MAX_NUM_ITEMS      = 800
 ROOT_LABEL:str     = "root"
 FOLDERS_LABEL      = "folders"
 GET_FILES_LABEL    = "getfiles"
 DELETE_FILES_LABEL = "deletefiles"
 METADATA_LABEL     = "metadata"
 NO_SESSION_MSG     = "No Session!"
+MAX_FILES_DELETE   = 500
+DEFAULT_NUM_FILES  = 100
+MAX_NUM_ITEMS      = 800
 
 # see https://github.com/googleapis/google-api-python-client/issues/299
 lg.getLogger("googleapiclient.discovery_cache").setLevel(lg.ERROR)
@@ -156,7 +156,7 @@ class MhsDriveAccess:
         return all_items
 
     def delete_files(self, p_pid:str, p_filetype:str, p_filedate:str):
-        """
+        """Delete selected files from my Google Drive
         :param p_pid: id of the parent folder on the drive, i.e. the folder to delete files from
         :param p_filetype: type of file to find
         :param p_filedate: find files OLDER than this date
@@ -371,9 +371,8 @@ def main_drive_functions(args:list):
     start_time = dt.now()
     save_option, choice, parent, pid, filetype, mime_option, numfiles, meta_id, logloc, fdate, test_option = process_args(args)
     log_control = MhsLogger( get_base_filename(__file__), folder = logloc, con_level = DEFAULT_LOG_LEVEL )
-    log_control.info(f"save option = {save_option}; choice = '{choice}'; log location = {logloc}; "
-                     f"mime option = {mime_option}; test option = {test_option}")
-    log_control.info(f"Start time = {start_time.strftime(RUN_DATETIME_FORMAT)}")
+    log_control.info(f"save option = {save_option}; choice = '{choice}'; log location = {logloc}; mime option = {mime_option}; "
+                     f"test option = {test_option}\n\t\tStart time = {start_time.strftime(RUN_DATETIME_FORMAT)}")
     mhsda = None
     result = []
     code = 0
@@ -433,5 +432,4 @@ def main_drive_functions(args:list):
 
 
 if __name__ == "__main__":
-    rcode = main_drive_functions(argv[1:])
-    exit(rcode)
+    exit( main_drive_functions(argv[1:]) )

@@ -11,7 +11,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __pyQt_version__   = "6.8"
 __created__ = "2024-10-11"
-__updated__ = "2024-10-31"
+__updated__ = "2024-11-01"
 
 from sys import path
 from PySide6.QtWidgets import (QApplication, QComboBox, QVBoxLayout, QGroupBox, QDialog, QFileDialog, QLabel, QCheckBox,
@@ -23,13 +23,13 @@ from driveFunctions import *
 
 NUMFILES_LABEL:str = "Choose the number of files"
 FILETYPE_LABEL:str = "File extension:"
-REQD_LABEL:str   = "Required: "
-REQD_STYLE:str   = "QPushButton {font-weight: bold; color: red; background-color: cyan;}"
-OPTION_LABEL:str = "Option: "
-LOG_LABEL:str    = "Change the logging level?"
-DEFAULT_QDATE    = QDate(2027,11,13)
-FUNCTIONS = {
-    "Get all Drive Folders": MhsDriveAccess.find_all_folders,  # [0]
+REQD_LABEL:str     = "Required: "
+REQD_STYLE:str     = "QPushButton {font-weight: bold; color: red; background-color: cyan;}"
+OPTION_LABEL:str   = "Option: "
+LOG_LABEL:str      = "Change the logging level?"
+DEFAULT_QDATE      = QDate(2027,11,13)
+DRIVE_FUNCTIONS = {
+    "Get ALL Drive Folders": MhsDriveAccess.find_all_folders,  # [0]
     "Get Drive files":       MhsDriveAccess.read_file_info,    # [1]
     "Send local folder":     MhsDriveAccess.send_folder,       # [2]
     "Send local file":       MhsDriveAccess.send_file,         # [3]
@@ -76,7 +76,7 @@ class DriveFunctionsUI(QDialog):
         gblayout = QFormLayout()
 
         # choose a function
-        self.fxn_keys = list(FUNCTIONS.keys())
+        self.fxn_keys = list(DRIVE_FUNCTIONS.keys())
         self.selected_function = self.fxn_keys[0]
         self.combox_fxn = QComboBox()
         self.combox_fxn.addItems(self.fxn_keys)
@@ -86,13 +86,11 @@ class DriveFunctionsUI(QDialog):
         gblayout.addRow(self.lbl_fxn, self.combox_fxn)
 
         # local file or folder
-        self.fsend_title = "Get local file or folder"
         self.filesend_title = "Get local file"
         self.foldersend_title = "Get local folder"
         self.pb_fsend = QPushButton()
-        self.lbl_fsend = QLabel("Send:")
-        self.pb_fsend.clicked.connect(partial(self.open_file_name_dialog, self.fsend_title))
-        gblayout.addRow(self.lbl_fsend, self.pb_fsend)
+        self.pb_fsend.clicked.connect(partial(self.open_file_name_dialog, "Get local file or folder"))
+        gblayout.addRow(QLabel("Send:"), self.pb_fsend)
 
         # Drive Folder
         self.folder_keys = list(FOLDER_IDS.keys())
@@ -100,25 +98,22 @@ class DriveFunctionsUI(QDialog):
         self.combox_drive_folder = QComboBox()
         self.combox_drive_folder.addItems(self.folder_keys)
         self.combox_drive_folder.currentIndexChanged.connect(self.drive_change)
-        self.lbl_drive_folder = QLabel("Drive Folder:")
-        gblayout.addRow(self.lbl_drive_folder, self.combox_drive_folder)
+        gblayout.addRow(QLabel("Drive Folder:"), self.combox_drive_folder)
 
-        # Metadata file
+        # metadata file
         self.meta_keys = list(FILE_IDS.keys())
         self.meta_filename = self.meta_keys[0]
         self.combox_meta_file = QComboBox()
         self.combox_meta_file.addItems(self.meta_keys)
         self.combox_meta_file.currentIndexChanged.connect(self.meta_change)
-        self.lbl_meta = QLabel("Metadata file:")
-        gblayout.addRow(self.lbl_meta, self.combox_meta_file)
+        gblayout.addRow(QLabel("Metadata file:"), self.combox_meta_file)
 
         # file extension
         self.fext_title = "File extension to query"
         self.pb_filext = QPushButton()
         self.fext_selected = DEFAULT_FILETYPE
-        self.lbl_fext = QLabel(FILETYPE_LABEL)
         self.pb_filext.clicked.connect(self.get_filext)
-        gblayout.addRow(self.lbl_fext, self.pb_filext)
+        gblayout.addRow(QLabel(FILETYPE_LABEL), self.pb_filext)
 
         # file mimeType
         self.mime_keys = list(FILE_MIME_TYPES.keys())
@@ -126,17 +121,15 @@ class DriveFunctionsUI(QDialog):
         self.combox_mime_type = QComboBox()
         self.combox_mime_type.addItems(self.mime_keys)
         self.combox_mime_type.currentIndexChanged.connect(self.mime_change)
-        self.lbl_mime = QLabel("Mime type:")
-        gblayout.addRow(self.lbl_mime, self.combox_mime_type)
+        gblayout.addRow(QLabel("Mime type:"), self.combox_mime_type)
 
         # target date for deletions
         self.de_date = QDateEdit(DEFAULT_QDATE, self)
         self.de_date.setMinimumDate(QDate(1970,1,1))
         self.de_date.setMaximumDate(QDate(2099,12,31))
         self.dt_selected = DEFAULT_DATE
-        self.lbl_dt = QLabel("Files older than:")
         self.de_date.userDateChanged.connect(self.get_date)
-        gblayout.addRow(self.lbl_dt, self.de_date)
+        gblayout.addRow(QLabel("Files older than:"), self.de_date)
 
         # mimeType option
         self.chbx_mime = QCheckBox("Type of file gets <mimeType> instead of <filename extension>?")
@@ -147,8 +140,7 @@ class DriveFunctionsUI(QDialog):
         self.num_files = 1
         self.pb_numfiles = QPushButton()
         self.pb_numfiles.clicked.connect(self.get_num_files)
-        self.lbl_numfiles = QLabel("Number of files:")
-        gblayout.addRow(self.lbl_numfiles, self.pb_numfiles)
+        gblayout.addRow(QLabel("Number of files:"), self.pb_numfiles)
 
         # testing option
         self.chbx_test = QCheckBox("Just REPORT the files found WITHOUT any actual deletions?")
@@ -158,7 +150,7 @@ class DriveFunctionsUI(QDialog):
         self.chbx_save = QCheckBox("Save function response to JSON file?")
         gblayout.addRow(QLabel("Save to JSON?"), self.chbx_save)
 
-        # change logging
+        # logging level
         self.pb_logging = QPushButton(LOG_LABEL)
         self.pb_logging.clicked.connect(self.get_log_level)
         gblayout.addRow(QLabel("Logging:"), self.pb_logging)
@@ -254,7 +246,6 @@ class DriveFunctionsUI(QDialog):
         else: # folder
             f_name = QFileDialog.getExistingDirectory(caption = "Get Folder", dir = f_dir,
                                                       options = QFileDialog.Option.DontUseNativeDialog)
-
         if f_name:
             self._lgr.info(f"Selected: {f_name}")
             display_name = get_filename(f_name)
@@ -321,7 +312,7 @@ class DriveFunctionsUI(QDialog):
         sf = self.selected_function
         self._lgr.info(f"Clicked '{self.exe_btn.text()}'... Function = '{sf}'")
         mhsda = None
-        exe = FUNCTIONS[sf]
+        exe = DRIVE_FUNCTIONS[sf]
         try:
             self._lgr.info(f"save = {self.chbx_save.isChecked()}; mime = {self.chbx_mime.isChecked()}; test = {self.chbx_test.isChecked()}")
             mhsda = MhsDriveAccess(self.chbx_save.isChecked(), self.chbx_mime.isChecked(), self.chbx_test.isChecked(), log_control)
@@ -383,7 +374,10 @@ if __name__ == "__main__":
         code = 13
     except ValueError as mve:
         log_control.exception(mve)
-        code = 13
+        code = 27
+    except HttpError as mghe:
+        log_control.exception(mghe)
+        code = 39
     except Exception as mex:
         log_control.exception(mex)
         code = 66

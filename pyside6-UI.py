@@ -11,7 +11,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __pyQt_version__   = "6.8"
 __created__ = "2024-10-11"
-__updated__ = "2024-11-01"
+__updated__ = "2024-11-03"
 
 from sys import path
 from PySide6.QtWidgets import (QApplication, QComboBox, QVBoxLayout, QGroupBox, QDialog, QFileDialog, QLabel, QCheckBox,
@@ -28,6 +28,8 @@ REQD_STYLE:str     = "QPushButton {font-weight: bold; color: red; background-col
 OPTION_LABEL:str   = "Option: "
 LOG_LABEL:str      = "Change the logging level?"
 DEFAULT_QDATE      = QDate(2027,11,13)
+MIN_QDATE          = QDate(1970,1,1)
+MAX_QDATE          = QDate(2099,12,31)
 DRIVE_FUNCTIONS = {
     "Get ALL Drive Folders": MhsDriveAccess.find_all_folders,  # [0]
     "Get Drive files":       MhsDriveAccess.read_file_info,    # [1]
@@ -124,9 +126,9 @@ class DriveFunctionsUI(QDialog):
         gblayout.addRow(QLabel("Mime type:"), self.combox_mime_type)
 
         # target date for deletions
-        self.de_date = QDateEdit(DEFAULT_QDATE, self)
-        self.de_date.setMinimumDate(QDate(1970,1,1))
-        self.de_date.setMaximumDate(QDate(2099,12,31))
+        self.de_date = QDateEdit(date = DEFAULT_QDATE, parent = self)
+        self.de_date.setMinimumDate(MIN_QDATE)
+        self.de_date.setMaximumDate(MAX_QDATE)
         self.dt_selected = DEFAULT_DATE
         self.de_date.userDateChanged.connect(self.get_date)
         gblayout.addRow(QLabel("Files older than:"), self.de_date)
@@ -191,7 +193,7 @@ class DriveFunctionsUI(QDialog):
             self.chbx_mime.hide()
             self.chbx_test.hide()
             self.de_date.hide()
-        elif sf == self.fxn_keys[5]: # delete | options: drive folder, file type, file date, num files, test mode
+        elif sf == self.fxn_keys[5]: # delete files | options: drive folder, file type, file date, num files, test mode
             self.combox_drive_folder.show()
             if self.chbx_mime.isChecked():
                 self.combox_mime_type.show()

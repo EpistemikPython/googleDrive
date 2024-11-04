@@ -14,7 +14,7 @@ __python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.149.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2021-05-14"
-__updated__ = "2024-11-01"
+__updated__ = "2024-11-03"
 
 from sys import argv, path
 import os
@@ -58,9 +58,6 @@ MAX_FILES_DELETE   = 500
 DEFAULT_NUM_FILES  = 100
 MAX_NUM_ITEMS      = 800
 
-# see https://github.com/googleapis/google-api-python-client/issues/299
-lg.getLogger("googleapiclient.discovery_cache").setLevel(lg.ERROR)
-
 def get_credentials(p_lgr:logging.Logger):
     """Get the proper credentials needed to access my Google drive."""
     creds = None
@@ -81,6 +78,7 @@ def get_credentials(p_lgr:logging.Logger):
         with open(JSON_TOKEN, 'w') as token:
             token.write( creds.to_json() )
         if osp.exists(DRIVE_TOKEN_PATH):
+            # rename the old token
             os.rename(DRIVE_TOKEN_PATH, DRIVE_TOKEN_PATH + osp.extsep + get_current_time(FILE_DATETIME_FORMAT))
         shutil.move(JSON_TOKEN, SECRETS_DIR)
 

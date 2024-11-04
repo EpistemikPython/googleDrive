@@ -13,7 +13,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.151.0"
 __created__ = "2021-05-14"
-__updated__ = "2024-11-03"
+__updated__ = "2024-11-04"
 
 from sys import path
 import os
@@ -43,6 +43,7 @@ DRIVE_ACCESS_SCOPE:list = ["https://www.googleapis.com/auth/drive"]
 
 DEFAULT_DATE       = "2027-11-13"
 NO_SESSION_MSG     = "No Session!"
+NO_RESULTS_MSG     = "No items found."
 MAX_FILES_DELETE   = 500
 DEFAULT_NUM_ITEMS  = 800
 MAX_NUM_ITEMS      = 3000
@@ -197,7 +198,7 @@ class UiDriveAccess:
                         responses.append(reply)
         except Exception as sdex:
             raise sdex
-        return responses
+        return responses if responses else [NO_RESULTS_MSG]
 
     def send_file(self, p_path:str, p_pid:str, p_parent:str):
         """SEND a local file to my Google drive.
@@ -250,8 +251,8 @@ class UiDriveAccess:
         limit = p_numitems if self.mime and p_numitems < MAX_NUM_ITEMS else DEFAULT_NUM_ITEMS
         items = self.find_items(p_mimetype = mime, p_date = fdate, p_limit = limit)
         if not items:
-            self.lgr.warning("No files found?!")
-            return ["No files found?!"]
+            self.lgr.warning(NO_RESULTS_MSG)
+            return [NO_RESULTS_MSG]
         self.lgr.log(self.lev, f"{len(items)} files retrieved. \n\t\t\t\tName \t\t  <type> \t(Id) \t\t\t\t   [parent id]")
         found_items = []
         for item in items:
@@ -260,7 +261,7 @@ class UiDriveAccess:
                 found_items.append(item)
                 # items 'shared with me' are in my Drive but without a parent
                 self.lgr.log(self.lev, f"{item['name']} <{item['mimeType']}> ({item['id']}) "
-                                f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
+                             f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
             else:
                 fname = f"{item['name']}"
                 # find the file type by using the filename extension
@@ -268,11 +269,11 @@ class UiDriveAccess:
                 if ftype == p_ftype:
                     found_items.append(item)
                     self.lgr.log(self.lev, f"{item['name']} <{item['mimeType']}> ({item['id']}) "
-                                    f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
+                                 f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
             if len(found_items) >= p_numitems:
                 break
         self.lgr.log(self.lev, f">> {len(found_items)} '{p_ftype}' files found.\n")
-        return found_items
+        return found_items if found_items else [NO_RESULTS_MSG]
 
     def find_folders(self, p_lim:int = DEFAULT_NUM_ITEMS):
         """Find ALL the folders on my Google drive."""

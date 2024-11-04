@@ -9,35 +9,57 @@
 __author_name__    = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
-__pyQt_version__   = "6.8"
+__pyQt_version__   = "6.8+"
 __created__ = "2024-10-11"
 __updated__ = "2024-11-03"
 
-from sys import path
+from sys import path, argv
 from PySide6.QtWidgets import (QApplication, QComboBox, QVBoxLayout, QGroupBox, QDialog, QFileDialog, QLabel, QCheckBox,
                                QPushButton, QFormLayout, QDialogButtonBox, QTextEdit, QInputDialog, QMessageBox, QDateEdit)
 from PySide6.QtCore import Qt, QDate
 from functools import partial
+from googleapiclient.errors import HttpError
 path.append("/home/marksa/git/Python/utils")
-from driveFunctions import *
+from uiFunctions import *
 
-NUMFILES_LABEL:str = "Choose the number of files"
-FILETYPE_LABEL:str = "File extension:"
-REQD_LABEL:str     = "Required: "
-REQD_STYLE:str     = "QPushButton {font-weight: bold; color: red; background-color: cyan;}"
-OPTION_LABEL:str   = "Option: "
-LOG_LABEL:str      = "Change the logging level?"
-DEFAULT_QDATE      = QDate(2027,11,13)
-MIN_QDATE          = QDate(1970,1,1)
-MAX_QDATE          = QDate(2099,12,31)
+BLANK_LABEL:str      = " "
+FSEND_LABEL:str      = "Send:"
+DFOLDER_LABEL:str    = "Drive Folder:"
+META_LABEL:str       = "Metadata file:"
+FILEXT_LABEL:str     = "File extension:"
+MIME_LABEL:str       = "Mime type:"
+CXMIME_LABEL:str     = "Use mimeType?"
+DATE_LABEL:str       = "Files older than:"
+TEST_LABEL:str       = "Just testing?"
+NUMITEMS_LABEL:str   = "Number of items:"
+NUMFILES_LABEL:str   = "Number of files:"
+NUMFOLDERS_LABEL:str = "Number of folders:"
+CHOOSE_LABEL:str     = "Choose the "
+REQD_LABEL:str       = "Required: "
+REQD_STYLE:str       = "QPushButton {font-weight: bold; color: red; background-color: cyan;}"
+OPTION_LABEL:str     = "Option: "
+LOG_LABEL:str        = "Change the logging level?"
+
+DEFAULT_QDATE = QDate(2027,11,13)
+MIN_QDATE     = QDate(1970,1,1)
+MAX_QDATE     = QDate(2099,12,31)
+
 DRIVE_FUNCTIONS = {
-    "Get ALL Drive Folders": MhsDriveAccess.find_all_folders,  # [0]
-    "Get Drive files":       MhsDriveAccess.read_file_info,    # [1]
-    "Send local folder":     MhsDriveAccess.send_folder,       # [2]
-    "Send local file":       MhsDriveAccess.send_file,         # [3]
-    "Get file metadata":     MhsDriveAccess.get_file_metadata, # [4]
-    "Delete Drive files":    MhsDriveAccess.delete_files       # [5]
+    "Get Drive Folders":  UiDriveAccess.find_folders,      # [0]
+    "Get Drive files":    UiDriveAccess.read_file_info,    # [1]
+    "Send local folder":  UiDriveAccess.send_folder,       # [2]
+    "Send local file":    UiDriveAccess.send_file,         # [3]
+    "Get file metadata":  UiDriveAccess.get_file_metadata, # [4]
+    "Delete Drive files": UiDriveAccess.delete_files       # [5]
     }
+
+def uihide(widgets:list):
+    for item in widgets:
+        item.hide()
+
+def uiblank(labels:list):
+    for lbl in labels:
+        lbl.setText(BLANK_LABEL)
 
 # noinspection PyAttributeOutsideInit
 class DriveFunctionsUI(QDialog):
@@ -90,9 +112,11 @@ class DriveFunctionsUI(QDialog):
         # local file or folder
         self.filesend_title = "Get local file"
         self.foldersend_title = "Get local folder"
+        self.forf_selected = None
         self.pb_fsend = QPushButton()
         self.pb_fsend.clicked.connect(partial(self.open_file_name_dialog, "Get local file or folder"))
-        gblayout.addRow(QLabel("Send:"), self.pb_fsend)
+        self.lbl_fsend = QLabel()
+        gblayout.addRow(self.lbl_fsend, self.pb_fsend)
 
         # Drive Folder
         self.folder_keys = list(FOLDER_IDS.keys())
@@ -100,7 +124,8 @@ class DriveFunctionsUI(QDialog):
         self.combox_drive_folder = QComboBox()
         self.combox_drive_folder.addItems(self.folder_keys)
         self.combox_drive_folder.currentIndexChanged.connect(self.drive_change)
-        gblayout.addRow(QLabel("Drive Folder:"), self.combox_drive_folder)
+        self.lbl_drive_folder = QLabel()
+        gblayout.addRow(self.lbl_drive_folder, self.combox_drive_folder)
 
         # metadata file
         self.meta_keys = list(FILE_IDS.keys())
@@ -108,14 +133,16 @@ class DriveFunctionsUI(QDialog):
         self.combox_meta_file = QComboBox()
         self.combox_meta_file.addItems(self.meta_keys)
         self.combox_meta_file.currentIndexChanged.connect(self.meta_change)
-        gblayout.addRow(QLabel("Metadata file:"), self.combox_meta_file)
+        self.lbl_meta = QLabel()
+        gblayout.addRow(self.lbl_meta, self.combox_meta_file)
 
         # file extension
         self.fext_title = "File extension to query"
         self.pb_filext = QPushButton()
-        self.fext_selected = DEFAULT_FILETYPE
+        self.fext_selected = None
         self.pb_filext.clicked.connect(self.get_filext)
-        gblayout.addRow(QLabel(FILETYPE_LABEL), self.pb_filext)
+        self.lbl_filext = QLabel()
+        gblayout.addRow(self.lbl_filext, self.pb_filext)
 
         # file mimeType
         self.mime_keys = list(FILE_MIME_TYPES.keys())
@@ -123,7 +150,8 @@ class DriveFunctionsUI(QDialog):
         self.combox_mime_type = QComboBox()
         self.combox_mime_type.addItems(self.mime_keys)
         self.combox_mime_type.currentIndexChanged.connect(self.mime_change)
-        gblayout.addRow(QLabel("Mime type:"), self.combox_mime_type)
+        self.lbl_mime = QLabel()
+        gblayout.addRow(self.lbl_mime, self.combox_mime_type)
 
         # target date for deletions
         self.de_date = QDateEdit(date = DEFAULT_QDATE, parent = self)
@@ -131,26 +159,31 @@ class DriveFunctionsUI(QDialog):
         self.de_date.setMaximumDate(MAX_QDATE)
         self.dt_selected = DEFAULT_DATE
         self.de_date.userDateChanged.connect(self.get_date)
-        gblayout.addRow(QLabel("Files older than:"), self.de_date)
+        self.lbl_date = QLabel()
+        gblayout.addRow(self.lbl_date, self.de_date)
 
         # mimeType option
         self.chbx_mime = QCheckBox("Type of file gets <mimeType> instead of <filename extension>?")
         self.chbx_mime.stateChanged.connect(self.chbx_mime_change)
-        gblayout.addRow(QLabel("Use mimeType?"), self.chbx_mime)
+        self.lbl_cxmime = QLabel()
+        gblayout.addRow(self.lbl_cxmime, self.chbx_mime)
 
         # number of files
-        self.num_files = 1
-        self.pb_numfiles = QPushButton()
-        self.pb_numfiles.clicked.connect(self.get_num_files)
-        gblayout.addRow(QLabel("Number of files:"), self.pb_numfiles)
+        self.num_items = 1
+        self.pb_numitems = QPushButton()
+        self.pb_numitems.clicked.connect(self.get_num_items)
+        self.lbl_numitems = QLabel()
+        gblayout.addRow(self.lbl_numitems, self.pb_numitems)
 
         # testing option
-        self.chbx_test = QCheckBox("Just REPORT the files found WITHOUT any actual deletions?")
-        gblayout.addRow(QLabel("Just testing?"), self.chbx_test)
+        self.chbx_test = QCheckBox("REPORT the files found WITHOUT any actual deletions?")
+        self.lbl_test = QLabel()
+        gblayout.addRow(self.lbl_test, self.chbx_test)
 
         # save to json option
         self.chbx_save = QCheckBox("Save function response to JSON file?")
-        gblayout.addRow(QLabel("Save to JSON?"), self.chbx_save)
+        self.lbl_save = QLabel("Save to JSON?")
+        gblayout.addRow(self.lbl_save, self.chbx_save)
 
         # logging level
         self.pb_logging = QPushButton(LOG_LABEL)
@@ -170,72 +203,136 @@ class DriveFunctionsUI(QDialog):
         self.selected_function = self.combox_fxn.currentText()
         sf = self.selected_function
         self._lgr.info(f"selected function changed to '{sf}'")
-        if sf == self.fxn_keys[3] or sf == self.fxn_keys[2]: # send file or folder | option: drive folder to send to
+        # send file or folder | option: drive folder to send to
+        if sf == self.fxn_keys[3] or sf == self.fxn_keys[2]:
             s_title = self.filesend_title if sf == self.fxn_keys[3] else self.foldersend_title
             self.pb_fsend.show()
             self.pb_fsend.setText(REQD_LABEL+s_title)
             self.pb_fsend.setStyleSheet(REQD_STYLE)
+            self.lbl_fsend.setText(FSEND_LABEL)
             self.combox_drive_folder.show()
+            self.lbl_drive_folder.setText(DFOLDER_LABEL)
+            # OFF
             self.combox_meta_file.hide()
+            self.lbl_meta.setText(BLANK_LABEL)
             self.combox_mime_type.hide()
-            self.pb_numfiles.hide()
+            self.lbl_mime.setText(BLANK_LABEL)
+            self.pb_numitems.hide()
+            self.lbl_numitems.setText(BLANK_LABEL)
             self.pb_filext.hide()
+            self.lbl_filext.setText(BLANK_LABEL)
             self.chbx_mime.hide()
+            self.lbl_cxmime.setText(BLANK_LABEL)
             self.chbx_test.hide()
+            self.lbl_test.setText(BLANK_LABEL)
             self.de_date.hide()
-        elif sf == self.fxn_keys[4]: # metadata | option: name of file to query
+            self.lbl_date.setText(BLANK_LABEL)
+        # metadata | option: name of file to query
+        elif sf == self.fxn_keys[4]:
             self.combox_meta_file.show()
+            self.lbl_meta.setText(META_LABEL)
+            # OFF
             self.combox_drive_folder.hide()
+            self.lbl_drive_folder.setText(BLANK_LABEL)
             self.combox_mime_type.hide()
+            self.lbl_mime.setText(BLANK_LABEL)
             self.pb_fsend.hide()
-            self.pb_numfiles.hide()
+            self.lbl_fsend.setText(BLANK_LABEL)
+            self.pb_numitems.hide()
+            self.lbl_numitems.setText(BLANK_LABEL)
             self.pb_filext.hide()
+            self.lbl_filext.setText(BLANK_LABEL)
             self.chbx_mime.hide()
+            self.lbl_cxmime.setText(BLANK_LABEL)
             self.chbx_test.hide()
+            self.lbl_test.setText(BLANK_LABEL)
             self.de_date.hide()
-        elif sf == self.fxn_keys[5]: # delete files | options: drive folder, file type, file date, num files, test mode
+            self.lbl_date.setText(BLANK_LABEL)
+        # delete files | options: drive folder, file type, file date, num files, test mode
+        elif sf == self.fxn_keys[5]:
             self.combox_drive_folder.show()
+            self.lbl_drive_folder.setText(DFOLDER_LABEL)
+            self.pb_numitems.show()
+            self.pb_numitems.setText(OPTION_LABEL+CHOOSE_LABEL+NUMFILES_LABEL[:-1])
+            self.lbl_numitems.setText(NUMFILES_LABEL)
             if self.chbx_mime.isChecked():
                 self.combox_mime_type.show()
+                self.lbl_mime.setText(MIME_LABEL)
                 self.pb_filext.hide()
+                self.lbl_filext.setText(BLANK_LABEL)
             else:
                 self.pb_filext.show()
                 self.pb_filext.setText(REQD_LABEL+self.fext_title)
                 self.pb_filext.setStyleSheet(REQD_STYLE)
+                self.lbl_filext.setText(FILEXT_LABEL)
                 self.combox_mime_type.hide()
-            self.combox_meta_file.hide()
-            self.pb_numfiles.hide()
+                self.lbl_mime.setText(BLANK_LABEL)
             self.de_date.show()
+            self.lbl_date.setText(DATE_LABEL)
             self.chbx_mime.show()
+            self.lbl_cxmime.setText(MIME_LABEL)
             self.chbx_test.show()
-            self.pb_fsend.hide()
-        elif sf == self.fxn_keys[1]: # get files | options: file type, number of files, mimeType, ?? ADD drive folder
+            self.lbl_test.setText(TEST_LABEL)
+            # OFF
+            uihide([self.combox_meta_file, self.pb_fsend])
+            uiblank([self.lbl_meta, self.lbl_fsend])
+            # self.combox_meta_file.hide()
+            # self.lbl_meta.setText(BLANK_LABEL)
+            # self.pb_fsend.hide()
+            # self.lbl_fsend.setText(BLANK_LABEL)
+        # get files | options: file type, number of files, mimeType, ?? ADD drive folder
+        elif sf == self.fxn_keys[1]:
             if self.chbx_mime.isChecked():
                 self.combox_mime_type.show()
+                self.lbl_mime.setText(MIME_LABEL)
+                self.lbl_mime.setStyleSheet("QLabel {font-weight: bold;}")
                 self.pb_filext.hide()
+                self.lbl_filext.setText(BLANK_LABEL)
             else:
                 self.pb_filext.show()
                 self.pb_filext.setText(OPTION_LABEL+self.fext_title)
                 self.pb_filext.setStyleSheet("")
-            self.pb_numfiles.show()
-            self.pb_numfiles.setText(OPTION_LABEL+NUMFILES_LABEL)
+                self.lbl_filext.setText(FILEXT_LABEL)
+                self.combox_mime_type.hide()
+                self.lbl_mime.setText(BLANK_LABEL)
+            self.pb_numitems.show()
+            self.pb_numitems.setText(OPTION_LABEL+CHOOSE_LABEL+NUMFILES_LABEL[:-1])
+            self.lbl_numitems.setText(NUMFILES_LABEL)
             self.chbx_mime.show()
+            self.lbl_cxmime.setText(CXMIME_LABEL)
+            # OFF
             self.pb_fsend.hide()
+            self.lbl_fsend.setText(BLANK_LABEL)
             self.combox_drive_folder.hide()
+            self.lbl_drive_folder.setText(BLANK_LABEL)
             self.combox_meta_file.hide()
-            self.combox_mime_type.hide()
+            self.lbl_meta.setText(BLANK_LABEL)
             self.chbx_test.hide()
+            self.lbl_test.setText(BLANK_LABEL)
             self.de_date.hide()
-        elif sf == self.fxn_keys[0]: # get all folders | NO options
+            self.lbl_date.setText(BLANK_LABEL)
+        # get folders | option = number of folders
+        elif sf == self.fxn_keys[0]:
+            self.pb_numitems.show()
+            self.pb_numitems.setText(OPTION_LABEL+CHOOSE_LABEL+NUMFOLDERS_LABEL[:-1])
+            self.lbl_numitems.setText(NUMFOLDERS_LABEL)
+            # OFF
             self.combox_drive_folder.hide()
+            self.lbl_drive_folder.setText(BLANK_LABEL)
             self.combox_meta_file.hide()
+            self.lbl_meta.setText(BLANK_LABEL)
             self.combox_mime_type.hide()
+            self.lbl_mime.setText(BLANK_LABEL)
             self.pb_fsend.hide()
-            self.pb_numfiles.hide()
+            self.lbl_fsend.setText(BLANK_LABEL)
             self.pb_filext.hide()
+            self.lbl_filext.setText(BLANK_LABEL)
             self.chbx_mime.hide()
+            self.lbl_cxmime.setText(BLANK_LABEL)
             self.chbx_test.hide()
+            self.lbl_test.setText(BLANK_LABEL)
             self.de_date.hide()
+            self.lbl_date.setText(BLANK_LABEL)
         else:
             raise Exception("?? INVALID Function Choice??!!")
 
@@ -269,10 +366,16 @@ class DriveFunctionsUI(QDialog):
     def chbx_mime_change(self):
         if self.chbx_mime.isChecked():
             self.combox_mime_type.show()
+            self.lbl_mime.setText(MIME_LABEL)
+            self.lbl_mime.setStyleSheet("QLabel {font-weight: bold;}")
             self.pb_filext.hide()
+            self.lbl_filext.setText(BLANK_LABEL)
         else:
             self.combox_mime_type.hide()
+            self.lbl_mime.setText(BLANK_LABEL)
+            self.lbl_mime.setStyleSheet("")
             self.pb_filext.show()
+            self.lbl_filext.setText(FILEXT_LABEL)
             if self.selected_function == self.fxn_keys[5]: # delete
                 self.pb_filext.setText(REQD_LABEL+self.fext_title)
                 self.pb_filext.setStyleSheet(REQD_STYLE)
@@ -281,7 +384,7 @@ class DriveFunctionsUI(QDialog):
                 self.pb_filext.setStyleSheet("")
 
     def get_filext(self):
-        ft_choice, ok = QInputDialog.getText(self, self.fext_title, FILETYPE_LABEL)
+        ft_choice, ok = QInputDialog.getText(self, self.fext_title, FILEXT_LABEL)
         if ok:
             self._lgr.info(f"File extension = '{ft_choice}'.")
             self.fext_selected = ft_choice
@@ -291,15 +394,14 @@ class DriveFunctionsUI(QDialog):
         self.dt_selected = self.de_date.date().toString(Qt.DateFormat.ISODate)
         self._lgr.info(f"Date selected = '{self.dt_selected}'.")
 
-    def get_num_files(self):
-        nfmax = MAX_FILES_DELETE if self.selected_function == self.fxn_keys[5] else MAX_NUM_ITEMS
-        fnum, ok = QInputDialog.getInt(self, "Number of Files", f"Enter a value (1-{nfmax})",
-                                       value = self.num_files, minValue = 1, maxValue = nfmax)
+    def get_num_items(self):
+        nimax = MAX_FILES_DELETE if self.selected_function == self.fxn_keys[5] else MAX_NUM_ITEMS
+        fnum, ok = QInputDialog.getInt(self, "Number of Items", f"Enter a value (1-{nimax})",
+                                       value = self.num_items, minValue = 1, maxValue = nimax)
         if ok:
-            self.num_files = fnum if nfmax >= fnum >= 1 else DEFAULT_NUM_FILES
-            self._lgr.info(f"number of files changed to {fnum}.")
-            dtext = f"Current value = {fnum}" if self.selected_function == self.fxn_keys[1] else "NO NEED"
-            self.pb_numfiles.setText(dtext)
+            self.num_items = fnum if nimax >= fnum >= 1 else DEFAULT_NUM_ITEMS
+            self._lgr.info(f"number of items changed to {fnum}.")
+            self.pb_numitems.setText(f"Current value = {fnum}")
 
     def get_log_level(self):
         num, ok = QInputDialog.getInt(self, "Logging Level", "Enter a value (0-100)",
@@ -313,13 +415,13 @@ class DriveFunctionsUI(QDialog):
         """Prepare the parameters string and send to main function of module parseMonarchCopyRep."""
         sf = self.selected_function
         self._lgr.info(f"Clicked '{self.exe_btn.text()}'... Function = '{sf}'")
-        mhsda = None
+        uida = None
         exe = DRIVE_FUNCTIONS[sf]
         try:
             self._lgr.info(f"save = {self.chbx_save.isChecked()}; mime = {self.chbx_mime.isChecked()}; test = {self.chbx_test.isChecked()}")
-            mhsda = MhsDriveAccess(self.chbx_save.isChecked(), self.chbx_mime.isChecked(), self.chbx_test.isChecked(), log_control)
-            mhsda.begin_session()
-            self._lgr.info(repr(mhsda))
+            uida = UiDriveAccess(self.chbx_save.isChecked(), self.chbx_mime.isChecked(), self.chbx_test.isChecked(), log_control)
+            uida.begin_session()
+            self._lgr.info(repr(uida))
             ftype = self.mime_type if self.chbx_mime.isChecked() else self.fext_selected
             if sf == self.fxn_keys[3] or sf == self.fxn_keys[2]: # send file or folder
                 if self.forf_selected is None:
@@ -327,33 +429,34 @@ class DriveFunctionsUI(QDialog):
                     msg_box.setIcon(QMessageBox.Icon.Warning)
                     msg_box.setText("MUST select a Drive file or folder!")
                     msg_box.exec()
-                    mhsda.end_session()
+                    uida.end_session()
                     return
                 self._lgr.info(f"file/folder = {self.forf_selected}; drive folder = {self.drive_folder}")
-                reply = exe(mhsda, self.forf_selected, FOLDER_IDS[self.drive_folder], self.drive_folder)
+                reply = exe(uida, self.forf_selected, FOLDER_IDS[self.drive_folder], self.drive_folder)
             elif sf == self.fxn_keys[4]: # metadata
                 self._lgr.info(f"meta file = {self.meta_filename}")
-                reply = exe(mhsda, self.meta_filename, FILE_IDS[self.meta_filename])
+                reply = exe(uida, self.meta_filename, FILE_IDS[self.meta_filename])
             elif sf == self.fxn_keys[5]: # delete files
                 self._lgr.info(f"drive folder = {self.drive_folder}; file type = {ftype}; "
                                f"mime = {self.chbx_mime.isChecked()}; date = {self.dt_selected}")
-                reply = exe(mhsda, FOLDER_IDS[self.drive_folder], ftype, self.dt_selected)
+                reply = exe(uida, FOLDER_IDS[self.drive_folder], ftype, self.dt_selected)
             elif sf == self.fxn_keys[1]: # get files
-                self._lgr.info(f"file type = {ftype}; num files = {self.num_files}")
-                reply = exe(mhsda, ftype, self.num_files)
-            elif sf == self.fxn_keys[0]: # get all folders
-                reply = exe(mhsda)
+                self._lgr.info(f"file type = {ftype}; num files = {self.num_items}")
+                reply = exe(uida, ftype, self.num_items)
+            elif sf == self.fxn_keys[0]: # get folders
+                self._lgr.info(f"num files = {self.num_items}")
+                reply = exe(uida, self.num_items)
             else:
                 raise Exception("?? INVALID Function Choice??!!")
             response = {"response":reply}
-        except Exception as bcce:
-            self.response_box.append(f"\nEXCEPTION:\n{repr(bcce)}\n")
-            raise bcce
+        except Exception as bce:
+            self.response_box.append(f"\nEXCEPTION:\n{repr(bce)}\n")
+            raise bce
         finally:
-            if mhsda:
-                mhsda.end_session()
+            if uida:
+                uida.end_session()
 
-        if mhsda.save and response:
+        if uida.save and response:
             jfile = save_to_json(get_base_filename(argv[0]), response)
             self._lgr.info(f"Saved results to '{jfile}'.")
 

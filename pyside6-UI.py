@@ -11,7 +11,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __pyQt_version__   = "6.8+"
 __created__ = "2024-10-11"
-__updated__ = "2024-11-04"
+__updated__ = "2024-11-05"
 
 from sys import path, argv
 from PySide6.QtWidgets import (QApplication, QComboBox, QVBoxLayout, QGroupBox, QDialog, QFileDialog, QLabel, QCheckBox,
@@ -31,7 +31,6 @@ MIME_LABEL:str       = "Mime type:"
 CXMIME_LABEL:str     = "Use mimeType?"
 DATE_LABEL:str       = "Files older than:"
 TEST_LABEL:str       = "Just testing?"
-# NUMITEMS_LABEL:str   = "Number of items:"
 NUMFILES_LABEL:str   = "Number of files:"
 NUMFOLDERS_LABEL:str = "Number of folders:"
 OPTION_LABEL:str     = "Option: "
@@ -46,12 +45,12 @@ MIN_QDATE     = QDate(1970,1,1)
 MAX_QDATE     = QDate(2099,12,31)
 
 DRIVE_FUNCTIONS = {
-    "Get Drive Folders":  UiDriveAccess.find_folders,      # [0]
+    "Get Drive folders":  UiDriveAccess.find_folders,      # [0]
     "Get Drive files":    UiDriveAccess.read_file_info,    # [1]
     "Send local folder":  UiDriveAccess.send_folder,       # [2]
     "Send local file":    UiDriveAccess.send_file,         # [3]
     "Get file metadata":  UiDriveAccess.get_file_metadata, # [4]
-    "Delete Drive files": UiDriveAccess.delete_files       # [5]
+    "DELETE Drive files": UiDriveAccess.delete_files       # [5]
     }
 
 def uihide(widgets:list):
@@ -68,17 +67,17 @@ class DriveFunctionsUI(QDialog):
     def __init__(self):
         super().__init__()
         self.title = "Drive Functions UI"
+        self.lgr = log_control.get_logger()
+        self.lgr.info(f"{self.title} Runtime = {dt.now().strftime(RUN_DATETIME_FORMAT)}\n")
+
+        self.setWindowTitle(self.title)
+        self.setWindowFlags(Qt.WindowType.WindowSystemMenuHint | Qt.WindowType.WindowTitleHint)
         self.left = 48
         self.top  = 70
         self.width  = 600
         self.height = 800
-        self._lgr = log_control.get_logger()
-        self.log_level = lg.INFO
-        self._lgr.info(f"{self.title} Runtime = {dt.now().strftime(RUN_DATETIME_FORMAT)}\n")
-
-        self.setWindowTitle(self.title)
-        self.setWindowFlags(Qt.WindowType.WindowSystemMenuHint | Qt.WindowType.WindowTitleHint)
         self.setGeometry(self.left, self.top, self.width, self.height)
+
         self.create_group_box()
 
         self.response_box = QTextEdit()
@@ -119,7 +118,7 @@ class DriveFunctionsUI(QDialog):
         self.lbl_fsend = QLabel()
         gblayout.addRow(self.lbl_fsend, self.pb_fsend)
 
-        # Drive Folder
+        # Drive folder
         self.folder_keys = list(FOLDER_IDS.keys())
         self.drive_folder = self.folder_keys[0]
         self.combox_drive_folder = QComboBox()
@@ -186,7 +185,8 @@ class DriveFunctionsUI(QDialog):
         self.chbx_save = QCheckBox("Save function response to JSON file?")
         gblayout.addRow(QLabel("Save to JSON?"), self.chbx_save)
 
-        # logging level
+        # logging level to pass to the selected function
+        self.fxn_log_level = DEFAULT_LOG_LEVEL
         self.pb_logging = QPushButton(LOG_LABEL)
         self.pb_logging.clicked.connect(self.get_log_level)
         gblayout.addRow(QLabel("Logging:"), self.pb_logging)
@@ -198,12 +198,14 @@ class DriveFunctionsUI(QDialog):
         gblayout.addRow(QLabel("EXECUTE:"), self.exe_btn)
 
         self.gb_main.setLayout(gblayout)
+        # ensure all the proper widgets are shown or hidden from the start
         self.fxn_change()
 
     def fxn_change(self):
+        """Show the appropriate parameter selection widgets according to which function is chosen."""
         self.selected_function = self.combox_fxn.currentText()
         sf = self.selected_function
-        self._lgr.info(f"selected function changed to '{sf}'")
+        self.lgr.info(f"selected function changed to '{sf}'")
         # GET FOLDERS | option = number of folders
         if sf == self.fxn_keys[0]:
             self.pb_numitems.show()
@@ -293,33 +295,35 @@ class DriveFunctionsUI(QDialog):
             raise Exception("?? INVALID Function Choice??!!")
 
     def open_file_name_dialog(self, label:str):
-        self._lgr.info(label)
+        """Choose a file OR a folder."""
+        self.lgr.info(label)
         f_dir = HOME_FOLDER
-        if self.combox_fxn.currentText() == self.fxn_keys[3]:
+        if self.combox_fxn.currentText() == self.fxn_keys[3]: # file
             f_name, _ = QFileDialog.getOpenFileName(caption = "Get File", filter = "File: All Files (*)",
                                                     dir = f_dir, options = QFileDialog.Option.DontUseNativeDialog)
         else: # folder
             f_name = QFileDialog.getExistingDirectory(caption = "Get Folder", dir = f_dir,
                                                       options = QFileDialog.Option.DontUseNativeDialog)
         if f_name:
-            self._lgr.info(f"Selected: {f_name}")
+            self.lgr.info(f"Selected: {f_name}")
             display_name = get_filename(f_name)
             self.forf_selected = f_name
             self.pb_fsend.setText(display_name)
 
     def drive_change(self):
         self.drive_folder = self.combox_drive_folder.currentText()
-        self._lgr.info(f"Selected Drive folder changed to '{self.drive_folder}'")
+        self.lgr.info(f"Selected Drive folder changed to '{self.drive_folder}'")
 
     def meta_change(self):
         self.meta_filename = self.combox_meta_file.currentText()
-        self._lgr.info(f"Selected meta file changed to '{self.meta_filename}'")
+        self.lgr.info(f"Selected meta file changed to '{self.meta_filename}'")
 
     def mime_change(self):
         self.mime_type = self.combox_mime_type.currentText()
-        self._lgr.info(f"Selected mimeType changed to '{self.mime_type}'")
+        self.lgr.info(f"Selected mimeType changed to '{self.mime_type}'")
 
     def chbx_mime_change(self):
+        """Show the file extension widget OR the mimeType widget depending if this box is checked."""
         if self.chbx_mime.isChecked():
             self.combox_mime_type.show()
             self.lbl_mime.setText(MIME_LABEL)
@@ -342,13 +346,13 @@ class DriveFunctionsUI(QDialog):
     def get_filext(self):
         ft_choice, ok = QInputDialog.getText(self, self.fext_title, FILEXT_LABEL)
         if ok:
-            self._lgr.info(f"File extension = '{ft_choice}'.")
+            self.lgr.info(f"File extension = '{ft_choice}'.")
             self.fext_selected = ft_choice
             self.pb_filext.setText(f"{self.fext_title} = {ft_choice}")
 
     def get_date(self):
         self.dt_selected = self.de_date.date().toString(Qt.DateFormat.ISODate)
-        self._lgr.info(f"Date selected = '{self.dt_selected}'.")
+        self.lgr.info(f"Date selected = '{self.dt_selected}'.")
 
     def get_num_items(self):
         nimax = MAX_FILES_DELETE if self.selected_function == self.fxn_keys[5] else MAX_NUM_ITEMS
@@ -356,30 +360,32 @@ class DriveFunctionsUI(QDialog):
                                        value = self.num_items, minValue = 1, maxValue = nimax)
         if ok:
             self.num_items = fnum if nimax >= fnum >= 1 else DEFAULT_NUM_ITEMS
-            self._lgr.info(f"number of items changed to {fnum}.")
+            self.lgr.info(f"number of items changed to {fnum}.")
             self.pb_numitems.setText(f"Current value = {fnum}")
 
     def get_log_level(self):
         num, ok = QInputDialog.getInt(self, "Logging Level", "Enter a value (0-100)",
-                                      value = self.log_level, minValue = 0, maxValue = 100)
+                                      value = self.fxn_log_level, minValue = 0, maxValue = 100)
         if ok:
-            self.log_level = num
-            self._lgr.info(f"logging level changed to {num}.")
+            self.fxn_log_level = num
+            self.lgr.info(f"function logging level changed to {num}.")
             self.pb_logging.setText(f"{LOG_LABEL}    Current value = {num}")
 
     def button_click(self):
-        """Prepare the parameters string and send to main function of module parseMonarchCopyRep."""
+        """Prepare the parameters and call the selected function of uiFunctions.UiDriveAccess."""
         sf = self.selected_function
-        self._lgr.info(f"Clicked '{self.exe_btn.text()}'... Function = '{sf}'")
+        self.lgr.info(f"Clicked '{self.exe_btn.text()}'... Function = '{sf}'")
         uida = None
         exe = DRIVE_FUNCTIONS[sf]
         try:
-            self._lgr.info(f"save = {self.chbx_save.isChecked()}; mime = {self.chbx_mime.isChecked()}; test = {self.chbx_test.isChecked()}")
-            uida = UiDriveAccess(self.chbx_save.isChecked(), self.chbx_mime.isChecked(), self.chbx_test.isChecked(), log_control)
+            self.lgr.info(f"save = {self.chbx_save.isChecked()}; mime = {self.chbx_mime.isChecked()}; test = {self.chbx_test.isChecked()}")
+            uida = UiDriveAccess(self.chbx_save.isChecked(), self.chbx_mime.isChecked(), self.chbx_test.isChecked(),
+                                 log_control, self.fxn_log_level)
             uida.begin_session()
-            self._lgr.info(repr(uida))
+            self.lgr.info(repr(uida))
             ftype = self.mime_type if self.chbx_mime.isChecked() else self.fext_selected
-            if sf == self.fxn_keys[3] or sf == self.fxn_keys[2]: # send file or folder
+
+            if sf == self.fxn_keys[3] or sf == self.fxn_keys[2]: # send local file or folder
                 if self.forf_selected is None:
                     msg_box = QMessageBox()
                     msg_box.setIcon(QMessageBox.Icon.Warning)
@@ -387,20 +393,20 @@ class DriveFunctionsUI(QDialog):
                     msg_box.exec()
                     uida.end_session()
                     return
-                self._lgr.info(f"file/folder = {self.forf_selected}; drive folder = {self.drive_folder}")
+                self.lgr.info(f"file/folder = {self.forf_selected}; drive folder = {self.drive_folder}")
                 reply = exe(uida, self.forf_selected, FOLDER_IDS[self.drive_folder], self.drive_folder)
-            elif sf == self.fxn_keys[4]: # metadata
-                self._lgr.info(f"meta file = {self.meta_filename}")
+            elif sf == self.fxn_keys[4]: # file metadata
+                self.lgr.info(f"meta file = {self.meta_filename}")
                 reply = exe(uida, self.meta_filename, FILE_IDS[self.meta_filename])
             elif sf == self.fxn_keys[5]: # delete files
-                self._lgr.info(f"drive folder = {self.drive_folder}; file type = {ftype}; "
+                self.lgr.info(f"drive folder = {self.drive_folder}; file type = {ftype}; "
                                f"mime = {self.chbx_mime.isChecked()}; date = {self.dt_selected}")
                 reply = exe(uida, FOLDER_IDS[self.drive_folder], ftype, self.dt_selected)
-            elif sf == self.fxn_keys[1]: # get files
-                self._lgr.info(f"file type = {ftype}; num files = {self.num_items}")
+            elif sf == self.fxn_keys[1]: # get Drive files
+                self.lgr.info(f"file type = {ftype}; num files = {self.num_items}")
                 reply = exe(uida, ftype, self.num_items)
-            elif sf == self.fxn_keys[0]: # get folders
-                self._lgr.info(f"num files = {self.num_items}")
+            elif sf == self.fxn_keys[0]: # get Drive folders
+                self.lgr.info(f"num files = {self.num_items}")
                 reply = exe(uida, self.num_items)
             else:
                 raise Exception("?? INVALID Function Choice??!!")
@@ -414,14 +420,16 @@ class DriveFunctionsUI(QDialog):
 
         if uida.save and response:
             jfile = save_to_json(get_base_filename(argv[0]), response)
-            self._lgr.info(f"Saved results to '{jfile}'.")
+            self.lgr.info(f"Saved results to '{jfile}'.")
 
         self.response_box.append(json.dumps(response, indent = 4))
 # END class DriveFunctionsUI
 
 
 if __name__ == "__main__":
-    log_control = MhsLogger(DriveFunctionsUI.__name__, con_level = DEFAULT_LOG_LEVEL)
+    log_level = argv[1] if len(argv) > 1 and argv[1].isnumeric() else DEFAULT_LOG_LEVEL
+    log_control = MhsLogger(DriveFunctionsUI.__name__, con_level = int(log_level))
+    log_control.logl(int(log_level), f"Console logging level = '{log_level}'.")
     dialog = None
     app = None
     code = 0

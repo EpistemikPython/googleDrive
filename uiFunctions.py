@@ -18,16 +18,14 @@ __updated__ = "2024-11-04"
 from sys import path
 import os
 import glob
-import shutil
 import threading
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-import logging
 path.append("/home/marksa/git/Python/utils")
-from mhsLogging import MhsLogger, DEFAULT_LOG_LEVEL
+from mhsLogging import *
 from mhsUtils import *
 SECRETS_DIR:str = osp.join(BASE_PYTHON_FOLDER, f"google{osp.sep}drive{osp.sep}secrets")
 path.append(SECRETS_DIR)
@@ -48,7 +46,7 @@ MAX_FILES_DELETE   = 500
 DEFAULT_NUM_ITEMS  = 800
 MAX_NUM_ITEMS      = 3000
 
-def get_creds(p_lgr:logging.Logger):
+def get_creds(p_lgr:lg.Logger):
     """Get the proper credentials needed to access my Google drive."""
     creds = None
     # The TOKEN file stores the user's access & refresh tokens and is
@@ -101,7 +99,7 @@ class UiDriveAccess:
             self._lock.release()
             self.lgr.info(f"released Drive lock at: {get_current_time()}")
 
-    def find_items(self, p_mimetype:str= "", p_date:str= "", p_pid:str= "", p_limit:int=0) -> list:
+    def _find_items(self, p_mimetype:str= "", p_date:str= "", p_pid:str= "", p_limit:int=0) -> list:
         """Find the specified items on my Google drive.
         :param p_mimetype: mimeType of files to retrieve
         :param p_date: find files OLDER than this date
@@ -143,7 +141,7 @@ class UiDriveAccess:
         return all_items
 
     def delete_files(self, p_pid:str, p_filetype:str, p_filedate:str):
-        """Delete selected files from my Google Drive
+        """DELETE selected files from my Google Drive
         :param p_pid: id of the parent folder on the drive, i.e. the folder to delete files from
         :param p_filetype: type of file to find
         :param p_filedate: find files OLDER than this date
@@ -153,7 +151,7 @@ class UiDriveAccess:
             self.lgr.warning(NO_SESSION_MSG)
             return [NO_SESSION_MSG]
         mimetype = FILE_MIME_TYPES[p_filetype] if self.mime else ""
-        items = self.find_items(p_date = p_filedate, p_pid = p_pid, p_mimetype = mimetype)
+        items = self._find_items(p_date = p_filedate, p_pid = p_pid, p_mimetype = mimetype)
         results = []
         for item in items:
             fname = item['name']
@@ -179,7 +177,7 @@ class UiDriveAccess:
         return results
 
     def send_folder(self, p_path:str, p_pid:str, p_parent:str):
-        """SEND all the files in a local folder to my Google drive.
+        """Send ALL the files in a local folder to my Google drive.
         :param p_path: path to the local folder to send files from
         :param p_pid:  id of the parent folder on the drive to send the files to
         :param p_parent: name of the parent folder on the drive
@@ -201,7 +199,7 @@ class UiDriveAccess:
         return responses if responses else [NO_RESULTS_MSG]
 
     def send_file(self, p_path:str, p_pid:str, p_parent:str):
-        """SEND a local file to my Google drive.
+        """Send a local file to my Google drive.
         :param p_path: path to the local folder to send files from
         :param p_pid:  id of the parent folder on the drive to send the files to
         :param p_parent: name of the parent folder on the drive
@@ -249,7 +247,7 @@ class UiDriveAccess:
         mime = FILE_MIME_TYPES[p_ftype] if self.mime else ""
         fdate = "" if self.mime else DEFAULT_DATE
         limit = p_numitems if self.mime and p_numitems < MAX_NUM_ITEMS else DEFAULT_NUM_ITEMS
-        items = self.find_items(p_mimetype = mime, p_date = fdate, p_limit = limit)
+        items = self._find_items(p_mimetype = mime, p_date = fdate, p_limit = limit)
         if not items:
             self.lgr.warning(NO_RESULTS_MSG)
             return [NO_RESULTS_MSG]
@@ -276,11 +274,11 @@ class UiDriveAccess:
         return found_items if found_items else [NO_RESULTS_MSG]
 
     def find_folders(self, p_lim:int = DEFAULT_NUM_ITEMS):
-        """Find ALL the folders on my Google drive."""
+        """Find folders on my Google drive."""
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
             return [NO_SESSION_MSG]
-        folders = self.find_items(p_mimetype = FILE_MIME_TYPES["gfldr"], p_limit = p_lim)
+        folders = self._find_items(p_mimetype = FILE_MIME_TYPES["gfldr"], p_limit = p_lim)
         self.lgr.log(self.lev, f">> Found {len(folders)} folders.\n")
         return folders
 # END class UiDriveAccess

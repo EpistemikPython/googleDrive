@@ -23,18 +23,10 @@ path.append("/home/marksa/git/Python/utils")
 from uiFunctions import *
 
 BLANK_LABEL:str      = " "
-FSEND_LABEL:str      = "Send:"
 DFOLDER_LABEL:str    = "Drive Folder:"
-META_LABEL:str       = "Metadata file:"
-FILEXT_LABEL:str     = "File extension:"
 MIME_LABEL:str       = "Mime type:"
-CXMIME_LABEL:str     = "Use mimeType?"
-DATE_LABEL:str       = "Files older than:"
-TEST_LABEL:str       = "Just testing?"
 NUMFILES_LABEL:str   = "Number of files:"
-NUMFOLDERS_LABEL:str = "Number of folders:"
 OPTION_LABEL:str     = "Option: "
-LOG_LABEL:str        = "Change the logging level?"
 CHOOSE_LABEL:str     = "Choose the "
 REQD_LABEL:str       = "Required: "
 QPB_REQD_STYLE:str   = "QPushButton {font-weight: bold; color: red; background-color: cyan;}"
@@ -45,19 +37,19 @@ MIN_QDATE     = QDate(1970,1,1)
 MAX_QDATE     = QDate(2099,12,31)
 
 DRIVE_FUNCTIONS = {
-    "Get Drive folders":  UiDriveAccess.find_folders,      # [0]
-    "Get Drive files":    UiDriveAccess.read_file_info,    # [1]
-    "Send local folder":  UiDriveAccess.send_folder,       # [2]
-    "Send local file":    UiDriveAccess.send_file,         # [3]
-    "Get file metadata":  UiDriveAccess.get_file_metadata, # [4]
-    "DELETE Drive files": UiDriveAccess.delete_files       # [5]
+    "Get Drive folders":   UiDriveAccess.find_folders,      # [0]
+    "Get Drive files":     UiDriveAccess.read_file_info,    # [1]
+    "Send local folder":   UiDriveAccess.send_folder,       # [2]
+    "Send local file":     UiDriveAccess.send_file,         # [3]
+    "Get file metadata":   UiDriveAccess.get_file_metadata, # [4]
+    "DELETE Drive files":  UiDriveAccess.delete_files       # [5]
     }
 
-def uihide(widgets:list):
+def ui_hide(widgets:list):
     for item in widgets:
         item.hide()
 
-def uiblank(labels:list):
+def ui_blank(labels:list):
     for lbl in labels:
         lbl.setText(BLANK_LABEL)
 
@@ -74,8 +66,8 @@ class DriveFunctionsUI(QDialog):
         self.setWindowFlags(Qt.WindowType.WindowSystemMenuHint | Qt.WindowType.WindowTitleHint)
         self.left = 48
         self.top  = 70
-        self.width  = 600
-        self.height = 800
+        self.width  = 540
+        self.height = 720
         self.setGeometry(self.left, self.top, self.width, self.height)
 
         self.create_group_box()
@@ -115,8 +107,8 @@ class DriveFunctionsUI(QDialog):
         self.forf_selected = None
         self.pb_fsend = QPushButton()
         self.pb_fsend.clicked.connect(partial(self.open_file_name_dialog, "Get local file or folder"))
-        self.lbl_fsend = QLabel()
-        gblayout.addRow(self.lbl_fsend, self.pb_fsend)
+        # self.lbl_fsend = QLabel()
+        gblayout.addRow(self.pb_fsend)
 
         # Drive folder
         self.folder_keys = list(FOLDER_IDS.keys())
@@ -140,10 +132,10 @@ class DriveFunctionsUI(QDialog):
         # file extension
         self.fext_title = "File extension to query"
         self.pb_filext = QPushButton()
-        self.fext_selected = None
+        self.fext_selected = "none"
         self.pb_filext.clicked.connect(self.get_filext)
-        self.lbl_filext = QLabel()
-        gblayout.addRow(self.lbl_filext, self.pb_filext)
+        # self.lbl_filext = QLabel()
+        gblayout.addRow(self.pb_filext)
 
         # file mimeType
         self.mime_keys = list(FILE_MIME_TYPES.keys())
@@ -166,36 +158,34 @@ class DriveFunctionsUI(QDialog):
         # mimeType option
         self.chbx_mime = QCheckBox("Type of file gets <mimeType> instead of <filename extension>?")
         self.chbx_mime.stateChanged.connect(self.chbx_mime_change)
-        self.lbl_cxmime = QLabel()
-        gblayout.addRow(self.lbl_cxmime, self.chbx_mime)
+        gblayout.addRow(self.chbx_mime)
 
         # number of files
         self.num_items = 1
         self.pb_numitems = QPushButton()
         self.pb_numitems.clicked.connect(self.get_num_items)
-        self.lbl_numitems = QLabel()
-        gblayout.addRow(self.lbl_numitems, self.pb_numitems)
+        # self.lbl_numitems = QLabel()
+        gblayout.addRow(self.pb_numitems)
 
         # testing option
         self.chbx_test = QCheckBox("REPORT the files found WITHOUT any actual deletions?")
-        self.lbl_test = QLabel()
-        gblayout.addRow(self.lbl_test, self.chbx_test)
+        gblayout.addRow(self.chbx_test)
 
         # save to json option
         self.chbx_save = QCheckBox("Save function response to JSON file?")
-        gblayout.addRow(QLabel("Save to JSON?"), self.chbx_save)
+        gblayout.addRow(self.chbx_save)
 
         # logging level to pass to the selected function
         self.fxn_log_level = DEFAULT_LOG_LEVEL
-        self.pb_logging = QPushButton(LOG_LABEL)
+        self.pb_logging = QPushButton("Change the logging level?")
         self.pb_logging.clicked.connect(self.get_log_level)
-        gblayout.addRow(QLabel("Logging:"), self.pb_logging)
+        gblayout.addRow(self.pb_logging)
 
         # execute
         self.exe_btn = QPushButton("Go!")
         self.exe_btn.setStyleSheet("QPushButton {font-weight: bold; color: yellow; background-color: red;}")
         self.exe_btn.clicked.connect(self.button_click)
-        gblayout.addRow(QLabel("EXECUTE:"), self.exe_btn)
+        gblayout.addRow(self.exe_btn)
 
         self.gb_main.setLayout(gblayout)
         # ensure all the proper widgets are shown or hidden from the start
@@ -209,88 +199,73 @@ class DriveFunctionsUI(QDialog):
         # GET FOLDERS | option = number of folders
         if sf == self.fxn_keys[0]:
             self.pb_numitems.show()
-            self.pb_numitems.setText(OPTION_LABEL+CHOOSE_LABEL+NUMFOLDERS_LABEL[:-1])
-            self.lbl_numitems.setText(NUMFOLDERS_LABEL)
+            self.pb_numitems.setText(OPTION_LABEL + CHOOSE_LABEL + "Number of folders")
             # OFF
-            uihide([self.combox_drive_folder, self.combox_meta_file, self.combox_mime_type,
-                    self.pb_fsend, self.pb_filext, self.chbx_mime, self.chbx_test, self.de_date])
-            uiblank([self.lbl_drive_folder, self.lbl_meta, self.lbl_mime, self.lbl_fsend,
-                     self.lbl_filext, self.lbl_cxmime, self.lbl_test, self.lbl_date])
+            ui_hide([self.combox_drive_folder, self.combox_meta_file, self.combox_mime_type,
+                     self.pb_fsend, self.pb_filext, self.chbx_mime, self.chbx_test, self.de_date])
+            ui_blank([self.lbl_drive_folder, self.lbl_meta, self.lbl_mime, self.lbl_date])
         # GET FILES | options: file type, number of files, mimeType
         # IDEA: ADD drive folder
         elif sf == self.fxn_keys[1]:
             if self.chbx_mime.isChecked():
                 self.combox_mime_type.show()
                 self.lbl_mime.setText(MIME_LABEL)
-                self.lbl_mime.setStyleSheet(LBL_BOLD_STYLE)
                 self.pb_filext.hide()
-                self.lbl_filext.setText(BLANK_LABEL)
             else:
                 self.pb_filext.show()
                 self.pb_filext.setText(OPTION_LABEL+self.fext_title)
                 self.pb_filext.setStyleSheet("")
-                self.lbl_filext.setText(FILEXT_LABEL)
                 self.combox_mime_type.hide()
                 self.lbl_mime.setText(BLANK_LABEL)
             self.pb_numitems.show()
             self.pb_numitems.setText(OPTION_LABEL+CHOOSE_LABEL+NUMFILES_LABEL[:-1])
-            self.lbl_numitems.setText(NUMFILES_LABEL)
             self.chbx_mime.show()
-            self.lbl_cxmime.setText(CXMIME_LABEL)
             # OFF
-            uihide([self.combox_drive_folder, self.pb_fsend, self.combox_meta_file, self.chbx_test, self.de_date])
-            uiblank([self.lbl_drive_folder, self.lbl_fsend, self.lbl_meta, self.lbl_test, self.lbl_date])
+            ui_hide([self.combox_drive_folder, self.pb_fsend, self.combox_meta_file, self.chbx_test, self.de_date])
+            ui_blank([self.lbl_drive_folder, self.lbl_meta, self.lbl_date])
         # SEND FILE OR FOLDER | option: drive folder to send to
         elif sf == self.fxn_keys[2] or sf == self.fxn_keys[3]:
             s_title = self.filesend_title if sf == self.fxn_keys[3] else self.foldersend_title
             self.pb_fsend.show()
             self.pb_fsend.setText(REQD_LABEL+s_title)
             self.pb_fsend.setStyleSheet(QPB_REQD_STYLE)
-            self.lbl_fsend.setText(FSEND_LABEL)
             self.combox_drive_folder.show()
             self.lbl_drive_folder.setText(DFOLDER_LABEL)
             # OFF
-            uihide([self.combox_meta_file, self.combox_mime_type, self.pb_numitems,
-                    self.pb_filext, self.chbx_mime, self.chbx_test, self.de_date])
-            uiblank([self.lbl_meta, self.lbl_mime, self.lbl_numitems,
-                     self.lbl_filext, self.lbl_cxmime, self.lbl_test, self.lbl_date])
+            ui_hide([self.combox_meta_file, self.combox_mime_type, self.pb_numitems,
+                     self.pb_filext, self.chbx_mime, self.chbx_test, self.de_date])
+            ui_blank([self.lbl_meta, self.lbl_mime, self.lbl_date])
         # GET FILE METADATA | option: name of file to query
         elif sf == self.fxn_keys[4]:
             self.combox_meta_file.show()
-            self.lbl_meta.setText(META_LABEL)
+            self.lbl_meta.setText("Metadata file:")
             # OFF
-            uihide([self.combox_drive_folder, self.pb_fsend, self.combox_mime_type, self.pb_numitems,
-                    self.pb_filext, self.chbx_mime, self.chbx_test, self.de_date])
-            uiblank([self.lbl_drive_folder, self.lbl_fsend, self.lbl_mime, self.lbl_numitems,
-                     self.lbl_filext, self.lbl_cxmime, self.lbl_test, self.lbl_date])
+            ui_hide([self.combox_drive_folder, self.pb_fsend, self.combox_mime_type, self.pb_numitems,
+                     self.pb_filext, self.chbx_mime, self.chbx_test, self.de_date])
+            ui_blank([self.lbl_drive_folder, self.lbl_mime, self.lbl_date])
         # DELETE FILES | options: drive folder, file type, file date, num files, test mode
         elif sf == self.fxn_keys[5]:
             self.combox_drive_folder.show()
             self.lbl_drive_folder.setText(DFOLDER_LABEL)
             self.pb_numitems.show()
             self.pb_numitems.setText(OPTION_LABEL+CHOOSE_LABEL+NUMFILES_LABEL[:-1])
-            self.lbl_numitems.setText(NUMFILES_LABEL)
             if self.chbx_mime.isChecked():
                 self.combox_mime_type.show()
                 self.lbl_mime.setText(MIME_LABEL)
                 self.pb_filext.hide()
-                self.lbl_filext.setText(BLANK_LABEL)
             else:
                 self.pb_filext.show()
                 self.pb_filext.setText(REQD_LABEL+self.fext_title)
                 self.pb_filext.setStyleSheet(QPB_REQD_STYLE)
-                self.lbl_filext.setText(FILEXT_LABEL)
                 self.combox_mime_type.hide()
                 self.lbl_mime.setText(BLANK_LABEL)
             self.de_date.show()
-            self.lbl_date.setText(DATE_LABEL)
+            self.lbl_date.setText("Files older than:")
             self.chbx_mime.show()
-            self.lbl_cxmime.setText(MIME_LABEL)
             self.chbx_test.show()
-            self.lbl_test.setText(TEST_LABEL)
             # OFF
-            uihide([self.combox_meta_file, self.pb_fsend])
-            uiblank([self.lbl_meta, self.lbl_fsend])
+            ui_hide([self.combox_meta_file, self.pb_fsend])
+            ui_blank([self.lbl_meta])
         else:
             raise Exception("?? INVALID Function Choice??!!")
 
@@ -327,15 +302,11 @@ class DriveFunctionsUI(QDialog):
         if self.chbx_mime.isChecked():
             self.combox_mime_type.show()
             self.lbl_mime.setText(MIME_LABEL)
-            self.lbl_mime.setStyleSheet(LBL_BOLD_STYLE)
             self.pb_filext.hide()
-            self.lbl_filext.setText(BLANK_LABEL)
         else:
             self.combox_mime_type.hide()
             self.lbl_mime.setText(BLANK_LABEL)
-            self.lbl_mime.setStyleSheet("")
             self.pb_filext.show()
-            self.lbl_filext.setText(FILEXT_LABEL)
             if self.selected_function == self.fxn_keys[5]: # delete
                 self.pb_filext.setText(REQD_LABEL+self.fext_title)
                 self.pb_filext.setStyleSheet(QPB_REQD_STYLE)
@@ -344,7 +315,7 @@ class DriveFunctionsUI(QDialog):
                 self.pb_filext.setStyleSheet("")
 
     def get_filext(self):
-        ft_choice, ok = QInputDialog.getText(self, self.fext_title, FILEXT_LABEL)
+        ft_choice, ok = QInputDialog.getText(self, self.fext_title, "File extension:")
         if ok:
             self.lgr.info(f"File extension = '{ft_choice}'.")
             self.fext_selected = ft_choice
@@ -361,7 +332,8 @@ class DriveFunctionsUI(QDialog):
         if ok:
             self.num_items = fnum if nimax >= fnum >= 1 else DEFAULT_NUM_ITEMS
             self.lgr.info(f"number of items changed to {fnum}.")
-            self.pb_numitems.setText(f"Current value = {fnum}")
+            items = "folders" if self.selected_function == self.fxn_keys[0] else "files"
+            self.pb_numitems.setText(f"Current number of {items} = {fnum}")
 
     def get_log_level(self):
         num, ok = QInputDialog.getInt(self, "Logging Level", "Enter a value (0-100)",
@@ -369,7 +341,7 @@ class DriveFunctionsUI(QDialog):
         if ok:
             self.fxn_log_level = num
             self.lgr.info(f"function logging level changed to {num}.")
-            self.pb_logging.setText(f"{LOG_LABEL}    Current value = {num}")
+            self.pb_logging.setText(f"Current logging level = {num}")
 
     def button_click(self):
         """Prepare the parameters and call the selected function of uiFunctions.UiDriveAccess."""
@@ -393,9 +365,10 @@ class DriveFunctionsUI(QDialog):
                 reply = exe(uida, ftype, self.num_items)
             elif sf == self.fxn_keys[2] or sf == self.fxn_keys[3]: # send local file or folder
                 if self.forf_selected is None:
+                    forf = "folder" if sf == self.fxn_keys[2] else "file"
                     msg_box = QMessageBox()
                     msg_box.setIcon(QMessageBox.Icon.Warning)
-                    msg_box.setText("MUST select a Drive file or folder!")
+                    msg_box.setText(f"MUST select a Drive {forf}!")
                     msg_box.exec()
                     uida.end_session()
                     return

@@ -255,22 +255,28 @@ class UiDriveAccess:
         self.lgr.log(self.lev, f"{len(items)} files retrieved.\n\t\t\t\tName\t\t\t<type>\t\t(Id)\t\t+Size+\t\t|modTime|\t\t\t\t\t\t[parent id]")
         found_items = []
         for item in items:
-            # items 'shared with me' are in my Drive but WITHOUT a parent
-            self.lgr.log(self.lev, f"{item['name']}\t\t<{item['mimeType']}>\t\t({item['id']})\t\t+{item['size']}+\t\t|{item['modifiedTime']}|"
-                                   f"\t\t{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
-            if self.mime:
-                # all the files are of the queried mimeType
-                found_items.append(item)
-            else:
-                fname = f"{item['name']}"
-                # find the file type by using the filename extension
-                ftype = get_filetype(fname)[1:]
-                if ftype == p_ftype:
+            # exclude folders
+            if item['mimeType'] != "application/vnd.google-apps.folder":
+                try:
+                    # items 'shared with me' are in my Drive but WITHOUT a parent
+                    self.lgr.log(self.lev, f"{item['name']}\t\t<{item['mimeType']}>\t\t({item['id']})\t\t+{item['size']}+"
+                                 f"\t\t|{item['modifiedTime']}|\t\t{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
+                except KeyError as lke:
+                    self.lgr.warning(f"{repr(lke)} for file '{item['name']}'")
+                if self.mime:
+                    # all the files are of the queried mimeType
                     found_items.append(item)
+                else:
+                    fname = f"{item['name']}"
+                    # find the file type by using the filename extension
+                    ftype = get_filetype(fname)[1:]
+                    if ftype == p_ftype:
+                        found_items.append(item)
             if len(found_items) >= p_numitems:
                 break
-        self.lgr.log(self.lev, f">> {len(found_items)} '{p_ftype}' files found.\n")
-        return found_items if found_items else [NO_RESULTS_MSG]
+        results_msg = f">> {len(found_items)} '{p_ftype}' files found.\n"
+        self.lgr.log(self.lev, results_msg)
+        return found_items if found_items else [results_msg]
 
     def find_folders(self, p_lim:int = DEFAULT_NUM_ITEMS):
         """Find folders on my Google drive."""

@@ -13,7 +13,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.151.0"
 __created__ = "2021-05-14"
-__updated__ = "2024-11-04"
+__updated__ = "2024-11-06"
 
 from sys import path
 import os
@@ -87,7 +87,7 @@ class UiDriveAccess:
     def begin_session(self):
         """Activate a UNIQUE session to the drive."""
         self._lock.acquire()
-        self.lgr.info(f"acquired Drive lock at: {get_current_time()}")
+        self.lgr.debug(f"acquired Drive lock at: {get_current_time()}")
         creds = get_creds(self.lgr)
         service = build("drive", "v3", credentials = creds)
         self.service = service.files()
@@ -97,7 +97,7 @@ class UiDriveAccess:
         self.service = None
         if self._lock and self._lock.locked():
             self._lock.release()
-            self.lgr.info(f"released Drive lock at: {get_current_time()}")
+            self.lgr.debug(f"released Drive lock at: {get_current_time()}")
 
     def _find_items(self, p_mimetype:str= "", p_date:str= "", p_pid:str= "", p_limit:int=0) -> list:
         """Find the specified items on my Google drive.
@@ -127,7 +127,7 @@ class UiDriveAccess:
             all_items = []
             while True:
                 results = self.service.list( q = iquery, spaces = "drive",
-                                             fields = "nextPageToken, files(id, name, mimeType, modifiedTime, parents)",
+                                             fields = "nextPageToken, files(id, name, mimeType, modifiedTime, size, parents)",
                                              pageToken = page_token ).execute()
                 items = results.get("files", [])
                 all_items = all_items + items if all_items else items
@@ -223,17 +223,18 @@ class UiDriveAccess:
             raise sfex
         return [response]
 
-    def get_file_metadata(self, p_filename:str, p_file_id:str):
+    def get_file_metadata(self, p_file_id:str):
         """
-        :param p_filename: name of the Drive file to get info from
         :param p_file_id:  id of the Drive file to get info from
         :return: the obtained metadata
         """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
             return [NO_SESSION_MSG]
-        file_metadata = self.service.get(fileId = p_file_id).execute()
-        self.lgr.log(self.lev, f"file '{p_filename}' metadata:\n{file_metadata}")
+        file_metadata = self.service.get(fileId = p_file_id, fields = '*').execute()
+        self.lgr.log(self.lev, f"\n\t\t\t\t\t\t{file_metadata['name']} data:")
+        for k, v in file_metadata.items():
+            self.lgr.log(self.lev, f"{k}: '{v}'")
         return [file_metadata]
 
     def read_file_info(self, p_ftype:str, p_numitems:int):
@@ -251,23 +252,21 @@ class UiDriveAccess:
         if not items:
             self.lgr.warning(NO_RESULTS_MSG)
             return [NO_RESULTS_MSG]
-        self.lgr.log(self.lev, f"{len(items)} files retrieved. \n\t\t\t\tName \t\t  <type> \t(Id) \t\t\t\t   [parent id]")
+        self.lgr.log(self.lev, f"{len(items)} files retrieved.\n\t\t\t\tName\t\t\t<type>\t\t(Id)\t\t+Size+\t\t|modTime|\t\t\t\t\t\t[parent id]")
         found_items = []
         for item in items:
+            # items 'shared with me' are in my Drive but WITHOUT a parent
+            self.lgr.log(self.lev, f"{item['name']}\t\t<{item['mimeType']}>\t\t({item['id']})\t\t+{item['size']}+\t\t|{item['modifiedTime']}|"
+                                   f"\t\t{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
             if self.mime:
                 # all the files are of the queried mimeType
                 found_items.append(item)
-                # items 'shared with me' are in my Drive but without a parent
-                self.lgr.log(self.lev, f"{item['name']} <{item['mimeType']}> ({item['id']}) "
-                             f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
             else:
                 fname = f"{item['name']}"
                 # find the file type by using the filename extension
                 ftype = get_filetype(fname)[1:]
                 if ftype == p_ftype:
                     found_items.append(item)
-                    self.lgr.log(self.lev, f"{item['name']} <{item['mimeType']}> ({item['id']}) "
-                                 f"{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
             if len(found_items) >= p_numitems:
                 break
         self.lgr.log(self.lev, f">> {len(found_items)} '{p_ftype}' files found.\n")

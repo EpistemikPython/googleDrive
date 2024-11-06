@@ -11,7 +11,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __pyQt_version__   = "6.8+"
 __created__ = "2024-10-11"
-__updated__ = "2024-11-05"
+__updated__ = "2024-11-06"
 
 from sys import path, argv
 from PySide6.QtWidgets import (QApplication, QComboBox, QVBoxLayout, QGroupBox, QDialog, QFileDialog, QLabel, QCheckBox,
@@ -382,10 +382,16 @@ class DriveFunctionsUI(QDialog):
             uida = UiDriveAccess(self.chbx_save.isChecked(), self.chbx_mime.isChecked(), self.chbx_test.isChecked(),
                                  log_control, self.fxn_log_level)
             uida.begin_session()
-            self.lgr.info(repr(uida))
+            self.lgr.debug(repr(uida))
             ftype = self.mime_type if self.chbx_mime.isChecked() else self.fext_selected
 
-            if sf == self.fxn_keys[3] or sf == self.fxn_keys[2]: # send local file or folder
+            if sf == self.fxn_keys[0]: # get Drive folders
+                self.lgr.info(f"num files = {self.num_items}")
+                reply = exe(uida, self.num_items)
+            elif sf == self.fxn_keys[1]:  # get Drive files
+                self.lgr.info(f"file type = {ftype}; num files = {self.num_items}")
+                reply = exe(uida, ftype, self.num_items)
+            elif sf == self.fxn_keys[2] or sf == self.fxn_keys[3]: # send local file or folder
                 if self.forf_selected is None:
                     msg_box = QMessageBox()
                     msg_box.setIcon(QMessageBox.Icon.Warning)
@@ -397,17 +403,11 @@ class DriveFunctionsUI(QDialog):
                 reply = exe(uida, self.forf_selected, FOLDER_IDS[self.drive_folder], self.drive_folder)
             elif sf == self.fxn_keys[4]: # file metadata
                 self.lgr.info(f"meta file = {self.meta_filename}")
-                reply = exe(uida, self.meta_filename, FILE_IDS[self.meta_filename])
+                reply = exe(uida, FILE_IDS[self.meta_filename])
             elif sf == self.fxn_keys[5]: # delete files
                 self.lgr.info(f"drive folder = {self.drive_folder}; file type = {ftype}; "
                                f"mime = {self.chbx_mime.isChecked()}; date = {self.dt_selected}")
                 reply = exe(uida, FOLDER_IDS[self.drive_folder], ftype, self.dt_selected)
-            elif sf == self.fxn_keys[1]: # get Drive files
-                self.lgr.info(f"file type = {ftype}; num files = {self.num_items}")
-                reply = exe(uida, ftype, self.num_items)
-            elif sf == self.fxn_keys[0]: # get Drive folders
-                self.lgr.info(f"num files = {self.num_items}")
-                reply = exe(uida, self.num_items)
             else:
                 raise Exception("?? INVALID Function Choice??!!")
             response = {"response":reply}

@@ -11,7 +11,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __pyQt_version__   = "6.8+"
 __created__ = "2024-10-11"
-__updated__ = "2024-11-06"
+__updated__ = "2024-11-07"
 
 from enum import IntEnum, auto
 from sys import path, argv
@@ -116,6 +116,7 @@ class DriveFunctionsUI(QDialog):
         self.foldersend_title = "Get local folder"
         self.forf_selected = None
         self.pb_fsend = QPushButton()
+        self.pb_fsend.setStyleSheet(QPB_REQD_STYLE)
         self.pb_fsend.clicked.connect(partial(self.open_file_name_dialog, "Get local file or folder"))
         self.lbl_fsend = QLabel()
         self.lbl_fsend.setStyleSheet(LBL_BOLD_STYLE)
@@ -141,8 +142,10 @@ class DriveFunctionsUI(QDialog):
 
         # file extension
         self.fext_title = "File extension to query"
-        self.pb_filext = QPushButton()
         self.fext_selected = ""
+        self.pb_filext = QPushButton()
+        self.pb_filext.setText(self.fext_title)
+        self.pb_filext.setStyleSheet(QPB_REQD_STYLE)
         self.pb_filext.clicked.connect(self.get_filext)
         self.lbl_filext = QLabel()
         self.lbl_filext.setStyleSheet(LBL_BOLD_STYLE)
@@ -220,6 +223,7 @@ class DriveFunctionsUI(QDialog):
         # GET FILES | option: number of files
         # IDEA: ADD drive folder
         elif sf == self.fxn_keys[Fxns.GET_FILES]:
+            self.chbx_mime.show()
             if self.chbx_mime.isChecked():
                 self.combox_mime_type.show()
                 self.lbl_mime.setText(MIME_LABEL)
@@ -227,14 +231,12 @@ class DriveFunctionsUI(QDialog):
                 self.lbl_filext.setText(BLANK_LABEL)
             else:
                 self.pb_filext.show()
-                self.pb_filext.setText(self.fext_title)
                 self.lbl_filext.setText(REQD_LABEL)
                 self.combox_mime_type.hide()
                 self.lbl_mime.setText(BLANK_LABEL)
             self.pb_numitems.show()
             self.pb_numitems.setText(CHOOSE_LABEL + NUMFILES_LABEL[:-1])
             self.lbl_numitems.setText(OPTION_LABEL)
-            self.chbx_mime.show()
             # OFF
             ui_hide([self.combox_drive_folder, self.pb_fsend, self.combox_meta_file, self.chbx_test, self.de_date])
             ui_blank([self.lbl_drive_folder, self.lbl_meta, self.lbl_date, self.lbl_fsend])
@@ -243,7 +245,6 @@ class DriveFunctionsUI(QDialog):
             s_title = self.filesend_title if sf == self.fxn_keys[Fxns.SEND_FILE] else self.foldersend_title
             self.pb_fsend.show()
             self.pb_fsend.setText(s_title)
-            self.pb_fsend.setStyleSheet(QPB_REQD_STYLE)
             self.lbl_fsend.setText(REQD_LABEL)
             self.combox_drive_folder.show()
             self.lbl_drive_folder.setText(DFOLDER_LABEL)
@@ -273,8 +274,6 @@ class DriveFunctionsUI(QDialog):
                 self.lbl_filext.setText(BLANK_LABEL)
             else:
                 self.pb_filext.show()
-                self.pb_filext.setText(self.fext_title)
-                self.pb_filext.setStyleSheet(QPB_REQD_STYLE)
                 self.lbl_filext.setText(REQD_LABEL)
                 self.combox_mime_type.hide()
                 self.lbl_mime.setText(BLANK_LABEL)

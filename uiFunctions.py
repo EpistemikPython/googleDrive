@@ -172,7 +172,6 @@ class UiDriveAccess:
         results_msg = f">> {num_results} '{ftf}' files found.\n"
         if num_results == 0:
             results.append(results_msg)
-        self.lgr.log(self.lev, results_msg)
         return results
 
     def send_folder(self, p_path:str, p_pid:str, p_parent:str):
@@ -223,10 +222,7 @@ class UiDriveAccess:
         return [response]
 
     def get_file_metadata(self, p_file_id:str):
-        """
-        :param p_file_id:  id of the Drive file to get info from
-        :return: the obtained metadata
-        """
+        """ :param p_file_id:  id of the Drive file to get info from """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
             return [NO_SESSION_MSG]
@@ -236,11 +232,11 @@ class UiDriveAccess:
             self.lgr.log(self.lev, f"{k}: '{v}'")
         return [file_metadata]
 
-    # IDEA: ADD drive folder
-    def read_file_info(self, p_ftype:str, p_numitems:int):
-        """Read file info from my Google drive.
-        :param p_ftype: type of file to get info on
+    def read_file_info(self, p_ftype:str, p_numitems:int, p_pid:str = ""):
+        """Read file info from my Google Drive.
+        :param p_ftype:    type of file to get info on
         :param p_numitems: number of files to get
+        :param p_pid:      id of parent folder on Drive
         """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
@@ -248,7 +244,7 @@ class UiDriveAccess:
         mime = FILE_MIME_TYPES[p_ftype] if self.mime else ""
         fdate = "" if self.mime else DEFAULT_DATE
         limit = p_numitems if 1 < p_numitems < MAX_NUM_ITEMS else DEFAULT_NUM_ITEMS
-        items = self._find_items(p_mimetype = mime, p_date = fdate, p_limit = limit)
+        items = self._find_items(p_mimetype = mime, p_date = fdate, p_limit = limit, p_pid = p_pid)
         if not items:
             self.lgr.warning(NO_RESULTS_MSG)
             return [NO_RESULTS_MSG]
@@ -259,8 +255,8 @@ class UiDriveAccess:
             if item['mimeType'] != "application/vnd.google-apps.folder":
                 try:
                     # items 'shared with me' are in my Drive but WITHOUT a parent
-                    self.lgr.log(self.lev, f"{item['name']}\t\t<{item['mimeType']}>\t\t({item['id']})\t\t+{item['size']}+"
-                                 f"\t\t|{item['modifiedTime']}|\t\t{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
+                    self.lgr.debug(f"{item['name']}\t\t<{item['mimeType']}>\t\t({item['id']})\t\t+{item['size']}+"
+                                   f"\t\t|{item['modifiedTime']}|\t\t{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
                 except KeyError as lke:
                     self.lgr.warning(f"{repr(lke)} for file '{item['name']}' with mimeType '{item['mimeType']}'")
                 if self.mime:
@@ -274,19 +270,19 @@ class UiDriveAccess:
                         found_items.append(item)
             if len(found_items) >= p_numitems:
                 break
-        results_msg = f">> {len(found_items)} '{p_ftype}' files found.\n"
-        self.lgr.log(self.lev, results_msg)
-        return found_items if found_items else [results_msg]
+        return found_items if found_items else [f">> NO '{p_ftype}' files found!\n"]
 
-    # IDEA: ADD drive folder
-    def find_folders(self, p_lim:int = DEFAULT_NUM_ITEMS):
-        """Find folders on my Google drive."""
+    def find_folders(self, p_numitems:int = DEFAULT_NUM_ITEMS, p_pid:str = ""):
+        """Find folders on my Google Drive.
+        :param p_numitems: number of files to get
+        :param p_pid:      id of parent folder on Drive """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
             return [NO_SESSION_MSG]
-        folders = self._find_items(p_mimetype = FILE_MIME_TYPES["gfldr"], p_limit = p_lim)
-        self.lgr.log(self.lev, f">> Found {len(folders)} folders.\n")
-        return folders
+        folders = self._find_items(p_mimetype = FILE_MIME_TYPES["google folder"], p_pid = p_pid, p_limit = p_numitems)
+        for item in folders:
+            self.lgr.debug(f"{item['name']}\t\t<{item['id']}>\t\t({item['modifiedTime']})\t\t+{item['parents']}")
+        return folders if folders else [f">> NO folders found!\n"]
 # END class UiDriveAccess
 
 

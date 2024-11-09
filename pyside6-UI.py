@@ -22,7 +22,7 @@ from googleapiclient.errors import HttpError
 from uiFunctions import *
 
 BLANK_LABEL:str      = " "
-DFOLDER_LABEL:str    = "Drive Folder:"
+DFOLDER_LABEL:str    = "in Drive folder:"
 MIME_LABEL:str       = "Mime type:"
 NUMFILES_LABEL:str   = "Number of files"
 REQD_LABEL:str       = "Required: "
@@ -162,7 +162,7 @@ class DriveFunctionsUI(QDialog):
         gblayout.addRow(self.lbl_mime, self.combox_mime_type)
 
         # number of items to retrieve
-        self.num_items = 1
+        self.num_items = DEFAULT_NUM_ITEMS
         self.pb_numitems = QPushButton()
         self.pb_numitems.clicked.connect(self.get_num_items)
         self.lbl_numitems = QLabel()
@@ -216,10 +216,12 @@ class DriveFunctionsUI(QDialog):
             self.pb_numitems.show()
             self.pb_numitems.setText(CHOOSE_LABEL + "Number of folders")
             self.lbl_numitems.setText(OPTION_LABEL)
+            self.combox_drive_folder.show()
+            self.lbl_drive_folder.setText(DFOLDER_LABEL)
             # OFF
-            ui_hide([self.combox_drive_folder, self.combox_meta_file, self.combox_mime_type,
-                     self.pb_fsend, self.pb_filext, self.chbx_mime, self.chbx_test, self.de_date])
-            ui_blank([self.lbl_drive_folder, self.lbl_meta, self.lbl_mime, self.lbl_date, self.lbl_filext, self.lbl_fsend])
+            ui_hide([self.combox_meta_file, self.combox_mime_type, self.pb_fsend, self.pb_filext,
+                     self.chbx_mime, self.chbx_test, self.de_date])
+            ui_blank([self.lbl_meta, self.lbl_mime, self.lbl_date, self.lbl_filext, self.lbl_fsend])
 
         elif sf == self.fxn_keys[Fxns.GET_FILES]: # option: number of files
             self.chbx_mime.show()
@@ -236,9 +238,11 @@ class DriveFunctionsUI(QDialog):
             self.pb_numitems.show()
             self.pb_numitems.setText(CHOOSE_LABEL + NUMFILES_LABEL)
             self.lbl_numitems.setText(OPTION_LABEL)
+            self.combox_drive_folder.show()
+            self.lbl_drive_folder.setText(DFOLDER_LABEL)
             # OFF
-            ui_hide([self.combox_drive_folder, self.pb_fsend, self.combox_meta_file, self.chbx_test, self.de_date])
-            ui_blank([self.lbl_drive_folder, self.lbl_meta, self.lbl_date, self.lbl_fsend])
+            ui_hide([self.pb_fsend, self.combox_meta_file, self.chbx_test, self.de_date])
+            ui_blank([self.lbl_meta, self.lbl_date, self.lbl_fsend])
 
         elif sf == self.fxn_keys[Fxns.SEND_FOLDER] or sf == self.fxn_keys[Fxns.SEND_FILE]: # option: drive folder to send to
             s_title = self.filesend_title if sf == self.fxn_keys[Fxns.SEND_FILE] else self.foldersend_title
@@ -372,10 +376,10 @@ class DriveFunctionsUI(QDialog):
 
             if sf == self.fxn_keys[Fxns.GET_FOLDERS]:
                 self.lgr.info(f"num files = {self.num_items}")
-                reply = exe(uida, self.num_items)
+                reply = exe(uida, self.num_items, FOLDER_IDS[self.drive_folder])
             elif sf == self.fxn_keys[Fxns.GET_FILES]:
                 self.lgr.info(f"file type = {ftype}; num files = {self.num_items}")
-                reply = exe(uida, ftype, self.num_items)
+                reply = exe(uida, ftype, self.num_items, FOLDER_IDS[self.drive_folder])
             elif sf == self.fxn_keys[Fxns.SEND_FOLDER] or sf == self.fxn_keys[Fxns.SEND_FILE]:
                 if self.forf_selected is None:
                     forf = "folder" if sf == self.fxn_keys[Fxns.SEND_FOLDER] else "file"
@@ -396,19 +400,18 @@ class DriveFunctionsUI(QDialog):
                 reply = exe(uida, FOLDER_IDS[self.drive_folder], ftype, self.dt_selected)
             else:
                 raise Exception("?? INVALID Function Choice??!!")
-            response = {"response":reply}
+            self.lgr.info(reply)
         except Exception as bce:
             self.response_box.append(f"\nEXCEPTION:\n{repr(bce)}\n")
             raise bce
         finally:
             if uida:
                 uida.end_session()
-
-        if uida.save and response:
-            jfile = save_to_json(basename, response)
-            self.lgr.info(f"Saved results to '{jfile}'.")
-
-        self.response_box.append(json.dumps(response, indent = 4))
+        if reply:
+            response = {"response":reply}
+            if uida.save:
+                self.lgr.info(f"Saved results to '{save_to_json(basename, response)}'.")
+            self.response_box.append(json.dumps(response, indent = 4))
 # END class DriveFunctionsUI
 
 

@@ -11,21 +11,20 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __pyQt_version__   = "6.8+"
 __created__ = "2024-10-11"
-__updated__ = "2024-11-08"
+__updated__ = "2024-11-09"
 
+from sys import argv
 from enum import IntEnum, auto
-from sys import path, argv
 from PySide6.QtWidgets import (QApplication, QComboBox, QVBoxLayout, QGroupBox, QDialog, QFileDialog, QLabel, QCheckBox,
                                QPushButton, QFormLayout, QDialogButtonBox, QTextEdit, QInputDialog, QMessageBox, QDateEdit)
 from PySide6.QtCore import Qt, QDate
 from googleapiclient.errors import HttpError
-path.append("/home/marksa/dev/git/Python/utils")
 from uiFunctions import *
 
 BLANK_LABEL:str      = " "
 DFOLDER_LABEL:str    = "Drive Folder:"
 MIME_LABEL:str       = "Mime type:"
-NUMFILES_LABEL:str   = "Number of files:"
+NUMFILES_LABEL:str   = "Number of files"
 REQD_LABEL:str       = "Required: "
 OPTION_LABEL:str     = "Option: "
 CHOOSE_LABEL:str     = "Choose the "
@@ -82,6 +81,7 @@ class DriveFunctionsUI(QDialog):
 
         self.response_box = QTextEdit()
         self.response_box.setReadOnly(True)
+        self.response_box.setStyleSheet("QTextEdit {background-color: rgb(254, 254, 210);}")
         self.response_box.setText("Waiting... ;)")
         response_label = QLabel("Responses:")
         response_label.setStyleSheet("QLabel {font-weight: bold; color: purple;}")
@@ -199,7 +199,7 @@ class DriveFunctionsUI(QDialog):
         # execute
         self.exe_btn = QPushButton("Go!")
         self.exe_btn.setStyleSheet("QPushButton {font-weight: bold; color: yellow; background-color: red;}")
-        self.exe_btn.clicked.connect(self.button_click)
+        self.exe_btn.clicked.connect(self.run_function)
         gblayout.addRow(self.exe_btn)
 
         self.gb_main.setLayout(gblayout)
@@ -221,7 +221,6 @@ class DriveFunctionsUI(QDialog):
                      self.pb_fsend, self.pb_filext, self.chbx_mime, self.chbx_test, self.de_date])
             ui_blank([self.lbl_drive_folder, self.lbl_meta, self.lbl_mime, self.lbl_date, self.lbl_filext, self.lbl_fsend])
 
-        # IDEA: ADD drive folder
         elif sf == self.fxn_keys[Fxns.GET_FILES]: # option: number of files
             self.chbx_mime.show()
             if self.chbx_mime.isChecked():
@@ -235,7 +234,7 @@ class DriveFunctionsUI(QDialog):
                 self.combox_mime_type.hide()
                 self.lbl_mime.setText(BLANK_LABEL)
             self.pb_numitems.show()
-            self.pb_numitems.setText(CHOOSE_LABEL + NUMFILES_LABEL[:-1])
+            self.pb_numitems.setText(CHOOSE_LABEL + NUMFILES_LABEL)
             self.lbl_numitems.setText(OPTION_LABEL)
             # OFF
             ui_hide([self.combox_drive_folder, self.pb_fsend, self.combox_meta_file, self.chbx_test, self.de_date])
@@ -265,7 +264,7 @@ class DriveFunctionsUI(QDialog):
             self.combox_drive_folder.show()
             self.lbl_drive_folder.setText(DFOLDER_LABEL)
             self.pb_numitems.show()
-            self.pb_numitems.setText(CHOOSE_LABEL + NUMFILES_LABEL[:-1])
+            self.pb_numitems.setText(CHOOSE_LABEL + NUMFILES_LABEL)
             self.lbl_numitems.setText(OPTION_LABEL)
             if self.chbx_mime.isChecked():
                 self.combox_mime_type.show()
@@ -357,7 +356,7 @@ class DriveFunctionsUI(QDialog):
             self.lgr.info(f"function logging level changed to {num}.")
             self.pb_logging.setText(f"Current logging level = {num}")
 
-    def button_click(self):
+    def run_function(self):
         """Prepare the parameters and call the selected function of uiFunctions.UiDriveAccess."""
         sf = self.selected_function
         self.lgr.info(f">> Run function '{sf}'")

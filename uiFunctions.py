@@ -13,7 +13,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.151.0"
 __created__ = "2021-05-14"
-__updated__ = "2024-11-06"
+__updated__ = "2024-11-09"
 
 from sys import path
 import os
@@ -102,9 +102,9 @@ class UiDriveAccess:
     def _find_items(self, p_mimetype:str= "", p_date:str= "", p_pid:str= "", p_limit:int=0) -> list:
         """Find the specified items on my Google drive.
         :param p_mimetype: mimeType of files to retrieve
-        :param p_date: find files OLDER than this date
-        :param p_pid:  id of the parent Drive folder to search in
-        :param p_limit: number of items to retrieve
+        :param p_date:     find files OLDER than this date
+        :param p_pid:      id of the parent Drive folder to search in
+        :param p_limit:    number of items to retrieve
         """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
@@ -142,10 +142,9 @@ class UiDriveAccess:
 
     def delete_files(self, p_pid:str, p_filetype:str, p_filedate:str):
         """DELETE selected files from my Google Drive
-        :param p_pid: id of the parent folder on the drive, i.e. the folder to delete files from
+        :param p_pid:      id of the parent folder on the drive, i.e. the folder to delete files from
         :param p_filetype: type of file to find
         :param p_filedate: find files OLDER than this date
-        :return: list of results
         """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
@@ -178,8 +177,8 @@ class UiDriveAccess:
 
     def send_folder(self, p_path:str, p_pid:str, p_parent:str):
         """Send ALL the files in a local folder to my Google drive.
-        :param p_path: path to the local folder to send files from
-        :param p_pid:  id of the parent folder on the drive to send the files to
+        :param p_path:   path to the local folder to send files from
+        :param p_pid:    id of the parent folder on the drive to send the files to
         :param p_parent: name of the parent folder on the drive
         """
         if not self.service:
@@ -200,8 +199,8 @@ class UiDriveAccess:
 
     def send_file(self, p_path:str, p_pid:str, p_parent:str):
         """Send a local file to my Google drive.
-        :param p_path: path to the local folder to send files from
-        :param p_pid:  id of the parent folder on the drive to send the files to
+        :param p_path:   path to the local folder to send files from
+        :param p_pid:    id of the parent folder on the drive to send the files to
         :param p_parent: name of the parent folder on the drive
         """
         if not self.service:
@@ -237,6 +236,7 @@ class UiDriveAccess:
             self.lgr.log(self.lev, f"{k}: '{v}'")
         return [file_metadata]
 
+    # IDEA: ADD drive folder
     def read_file_info(self, p_ftype:str, p_numitems:int):
         """Read file info from my Google drive.
         :param p_ftype: type of file to get info on
@@ -247,7 +247,7 @@ class UiDriveAccess:
             return [NO_SESSION_MSG]
         mime = FILE_MIME_TYPES[p_ftype] if self.mime else ""
         fdate = "" if self.mime else DEFAULT_DATE
-        limit = p_numitems if self.mime and p_numitems < MAX_NUM_ITEMS else DEFAULT_NUM_ITEMS
+        limit = p_numitems if 1 < p_numitems < MAX_NUM_ITEMS else DEFAULT_NUM_ITEMS
         items = self._find_items(p_mimetype = mime, p_date = fdate, p_limit = limit)
         if not items:
             self.lgr.warning(NO_RESULTS_MSG)
@@ -262,7 +262,7 @@ class UiDriveAccess:
                     self.lgr.log(self.lev, f"{item['name']}\t\t<{item['mimeType']}>\t\t({item['id']})\t\t+{item['size']}+"
                                  f"\t\t|{item['modifiedTime']}|\t\t{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
                 except KeyError as lke:
-                    self.lgr.warning(f"{repr(lke)} for file '{item['name']}'")
+                    self.lgr.warning(f"{repr(lke)} for file '{item['name']}' with mimeType '{item['mimeType']}'")
                 if self.mime:
                     # all the files are of the queried mimeType
                     found_items.append(item)
@@ -278,6 +278,7 @@ class UiDriveAccess:
         self.lgr.log(self.lev, results_msg)
         return found_items if found_items else [results_msg]
 
+    # IDEA: ADD drive folder
     def find_folders(self, p_lim:int = DEFAULT_NUM_ITEMS):
         """Find folders on my Google drive."""
         if not self.service:

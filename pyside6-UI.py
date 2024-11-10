@@ -373,14 +373,15 @@ class DriveFunctionsUI(QDialog):
             uida.begin_session()
             self.lgr.debug(repr(uida))
             ftype = self.mime_type if (self.chbx_mime.isChecked() or not self.fext_selected) else self.fext_selected
-
+            parent_folder = FOLDER_IDS[self.drive_folder]
             if sf == self.fxn_keys[Fxns.GET_FOLDERS]:
-                self.lgr.info(f"num files = {self.num_items}")
-                reply = exe(uida, self.num_items, FOLDER_IDS[self.drive_folder])
+                self.lgr.info(f"num files = {self.num_items}, parent Drive folder = {parent_folder}")
+                reply = exe(uida, self.num_items, parent_folder)
             elif sf == self.fxn_keys[Fxns.GET_FILES]:
-                self.lgr.info(f"file type = {ftype}; num files = {self.num_items}")
-                reply = exe(uida, ftype, self.num_items, FOLDER_IDS[self.drive_folder])
-            elif sf == self.fxn_keys[Fxns.SEND_FOLDER] or sf == self.fxn_keys[Fxns.SEND_FILE]:
+                self.lgr.info(f"file type = {ftype}; num files = {self.num_items}; parent Drive folder = {parent_folder}")
+                reply = exe(uida, ftype, self.num_items, parent_folder)
+            elif ( sf == self.fxn_keys[Fxns.SEND_FOLDER]
+                  or sf == self.fxn_keys[Fxns.SEND_FILE] ):
                 if self.forf_selected is None:
                     forf = "folder" if sf == self.fxn_keys[Fxns.SEND_FOLDER] else "file"
                     msg_box = QMessageBox()
@@ -390,14 +391,24 @@ class DriveFunctionsUI(QDialog):
                     uida.end_session()
                     return
                 self.lgr.info(f"file/folder = {self.forf_selected}; drive folder = {self.drive_folder}")
-                reply = exe(uida, self.forf_selected, FOLDER_IDS[self.drive_folder], self.drive_folder)
-            elif sf == self.fxn_keys[Fxns.GET_METADATA]: # file metadata
+                reply = exe(uida, self.forf_selected, parent_folder, self.drive_folder)
+            elif sf == self.fxn_keys[Fxns.GET_METADATA]:
                 self.lgr.info(f"meta file = {self.meta_filename}")
                 reply = exe(uida, FILE_IDS[self.meta_filename])
-            elif sf == self.fxn_keys[Fxns.DELETE_FILES]: # delete files
+            elif sf == self.fxn_keys[Fxns.DELETE_FILES]:
                 self.lgr.info(f"drive folder = {self.drive_folder}; file type = {ftype}; "
                                f"mime = {self.chbx_mime.isChecked()}; date = {self.dt_selected}")
-                reply = exe(uida, FOLDER_IDS[self.drive_folder], ftype, self.dt_selected)
+                if not self.chbx_test.isChecked():
+                    confirm_box = QMessageBox()
+                    confirm_box.setIcon(QMessageBox.Icon.Question)
+                    confirm_box.setText("Are you SURE you want to DELETE the specified items?")
+                    # confirm_box.setInformativeText("Do you want to save your changes?")
+                    confirm_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+                    confirm_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+                    if confirm_box.exec() == QMessageBox.StandardButton.Cancel:
+                        uida.end_session()
+                        return
+                reply = exe(uida, parent_folder, ftype, self.dt_selected)
             else:
                 raise Exception("?? INVALID Function Choice??!!")
             self.lgr.info(reply)

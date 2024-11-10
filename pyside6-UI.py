@@ -11,7 +11,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __pyQt_version__   = "6.8+"
 __created__ = "2024-10-11"
-__updated__ = "2024-11-09"
+__updated__ = "2024-11-10"
 
 from sys import argv
 from enum import IntEnum, auto
@@ -131,6 +131,13 @@ class DriveFunctionsUI(QDialog):
         self.lbl_drive_folder = QLabel()
         gblayout.addRow(self.lbl_drive_folder, self.combox_drive_folder)
 
+        # number of items to retrieve
+        self.num_items = DEFAULT_NUM_ITEMS
+        self.pb_numitems = QPushButton()
+        self.pb_numitems.clicked.connect(self.get_num_items)
+        self.lbl_numitems = QLabel()
+        gblayout.addRow(self.lbl_numitems, self.pb_numitems)
+
         # get metadata of a Drive file
         self.meta_keys = list(FILE_IDS.keys())
         self.meta_filename = self.meta_keys[0]
@@ -161,12 +168,10 @@ class DriveFunctionsUI(QDialog):
         self.lbl_mime.setStyleSheet(LBL_BOLD_STYLE)
         gblayout.addRow(self.lbl_mime, self.combox_mime_type)
 
-        # number of items to retrieve
-        self.num_items = DEFAULT_NUM_ITEMS
-        self.pb_numitems = QPushButton()
-        self.pb_numitems.clicked.connect(self.get_num_items)
-        self.lbl_numitems = QLabel()
-        gblayout.addRow(self.lbl_numitems, self.pb_numitems)
+        # mimeType option
+        self.chbx_mime = QCheckBox("Type of file gets <mimeType> instead of <filename extension>?")
+        self.chbx_mime.stateChanged.connect(self.chbx_mime_change)
+        gblayout.addRow(self.chbx_mime)
 
         # target date for deletions
         self.de_date = QDateEdit(date = DEFAULT_QDATE, parent = self)
@@ -176,11 +181,6 @@ class DriveFunctionsUI(QDialog):
         self.de_date.userDateChanged.connect(self.get_date)
         self.lbl_date = QLabel()
         gblayout.addRow(self.lbl_date, self.de_date)
-
-        # mimeType option
-        self.chbx_mime = QCheckBox("Type of file gets <mimeType> instead of <filename extension>?")
-        self.chbx_mime.stateChanged.connect(self.chbx_mime_change)
-        gblayout.addRow(self.chbx_mime)
 
         # testing option
         self.chbx_test = QCheckBox("REPORT the files found WITHOUT any actual deletions?")

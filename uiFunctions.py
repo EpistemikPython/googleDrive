@@ -13,7 +13,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.151.0"
 __created__ = "2021-05-14"
-__updated__ = "2024-11-09"
+__updated__ = "2024-11-10"
 
 from sys import path
 import os
@@ -105,6 +105,7 @@ class UiDriveAccess:
         :param p_date:     find files OLDER than this date
         :param p_pid:      id of the parent Drive folder to search in
         :param p_limit:    number of items to retrieve
+        :return  list of items retrieved
         """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
@@ -140,11 +141,12 @@ class UiDriveAccess:
             raise ffex
         return all_items
 
-    def delete_files(self, p_pid:str, p_filetype:str, p_filedate:str):
+    def delete_files(self, p_pid:str, p_filetype:str, p_filedate:str) -> list:
         """DELETE selected files from my Google Drive
         :param p_pid:      id of the parent folder on the drive, i.e. the folder to delete files from
         :param p_filetype: type of file to find
         :param p_filedate: find files OLDER than this date
+        :return list of: items deleted OR 'would have been' deleted; OR the 'no results' message
         """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
@@ -162,23 +164,22 @@ class UiDriveAccess:
                     result = f"Testing: Would have deleted file '{fname}' with date: {fdate}"
                 else:
                     response = self.service.delete(fileId = fid).execute()
-                    result = f"delete response[{fname} @ {fdate}] = '{response}'."
+                    result = f"deleted '{fname}' with date '{fdate}' | response = '{response}'"
                 self.lgr.log(self.lev, result)
                 results.append(result)
                 if len(results) >= MAX_FILES_DELETE:
                     break
         ftf = p_filetype if self.mime else f".{p_filetype}"
-        num_results = len(results)
-        results_msg = f">> {num_results} '{ftf}' files found.\n"
-        if num_results == 0:
-            results.append(results_msg)
+        if len(results) == 0:
+            results.append(f">> NO '{ftf}' files found.\n")
         return results
 
-    def send_folder(self, p_path:str, p_pid:str, p_parent:str):
+    def send_folder(self, p_path:str, p_pid:str, p_parent:str) -> list:
         """Send ALL the files in a local folder to my Google drive.
         :param p_path:   path to the local folder to send files from
         :param p_pid:    id of the parent folder on the drive to send the files to
         :param p_parent: name of the parent folder on the drive
+        :return  list of items sent OR the 'no results' message
         """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
@@ -196,11 +197,12 @@ class UiDriveAccess:
             raise sdex
         return responses if responses else [NO_RESULTS_MSG]
 
-    def send_file(self, p_path:str, p_pid:str, p_parent:str):
+    def send_file(self, p_path:str, p_pid:str, p_parent:str) -> list:
         """Send a local file to my Google drive.
         :param p_path:   path to the local folder to send files from
         :param p_pid:    id of the parent folder on the drive to send the files to
         :param p_parent: name of the parent folder on the drive
+        :return  response from Drive
         """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
@@ -221,8 +223,9 @@ class UiDriveAccess:
             raise sfex
         return [response]
 
-    def get_file_metadata(self, p_file_id:str):
-        """ :param p_file_id:  id of the Drive file to get info from """
+    def get_file_metadata(self, p_file_id:str) -> list:
+        """ :param p_file_id:  id of the Drive file to get info from
+            :return  list of returned metadata  """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
             return [NO_SESSION_MSG]
@@ -232,11 +235,12 @@ class UiDriveAccess:
             self.lgr.log(self.lev, f"{k}: '{v}'")
         return [file_metadata]
 
-    def read_file_info(self, p_ftype:str, p_numitems:int, p_pid:str = ""):
+    def read_file_info(self, p_ftype:str, p_numitems:int, p_pid:str = "") -> list:
         """Read file info from my Google Drive.
         :param p_ftype:    type of file to get info on
         :param p_numitems: number of files to get
         :param p_pid:      id of parent folder on Drive
+        :return list of found items OR the 'no results' message
         """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
@@ -272,10 +276,12 @@ class UiDriveAccess:
                 break
         return found_items if found_items else [f">> NO '{p_ftype}' files found!\n"]
 
-    def find_folders(self, p_numitems:int = DEFAULT_NUM_ITEMS, p_pid:str = ""):
+    def find_folders(self, p_numitems:int = DEFAULT_NUM_ITEMS, p_pid:str = "") -> list:
         """Find folders on my Google Drive.
         :param p_numitems: number of files to get
-        :param p_pid:      id of parent folder on Drive """
+        :param p_pid:      id of parent folder on Drive
+        :return list of found items OR the 'no results' message
+        """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
             return [NO_SESSION_MSG]

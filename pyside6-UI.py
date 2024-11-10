@@ -36,12 +36,12 @@ MIN_QDATE      = QDate(1970,1,1)
 MAX_QDATE      = QDate(2099,12,31)
 
 DRIVE_FUNCTIONS = {
-    "Get Drive folders":   UiDriveAccess.find_folders,      # [0]
-    "Get Drive files":     UiDriveAccess.read_file_info,    # [1]
-    "Send local folder":   UiDriveAccess.send_folder,       # [2]
-    "Send local file":     UiDriveAccess.send_file,         # [3]
-    "Get file metadata":   UiDriveAccess.get_file_metadata, # [4]
-    "DELETE Drive files":  UiDriveAccess.delete_files       # [5]
+    "Get Drive folders" :  UiDriveAccess.find_folders,      # [0]
+    "Get Drive files"   :  UiDriveAccess.read_file_info,    # [1]
+    "Send local folder" :  UiDriveAccess.send_folder,       # [2]
+    "Send local file"   :  UiDriveAccess.send_file,         # [3]
+    "Get file metadata" :  UiDriveAccess.get_file_metadata, # [4]
+    "DELETE Drive items":  UiDriveAccess.delete_items       # [5]
     }
 
 def ui_hide(widgets:list):
@@ -58,7 +58,7 @@ class Fxns(IntEnum):
     SEND_FOLDER  = auto()
     SEND_FILE    = auto()
     GET_METADATA = auto()
-    DELETE_FILES = auto()
+    DELETE_ITEMS = auto()
 
 # noinspection PyAttributeOutsideInit
 class DriveFunctionsUI(QDialog):
@@ -158,7 +158,7 @@ class DriveFunctionsUI(QDialog):
         self.lbl_filext.setStyleSheet(LBL_BOLD_STYLE)
         gblayout.addRow(self.lbl_filext, self.pb_filext)
 
-        # query file mimeType
+        # query item mimeType
         self.mime_keys = list(FILE_MIME_TYPES.keys())
         self.mime_type = self.mime_keys[0]
         self.combox_mime_type = QComboBox()
@@ -169,7 +169,7 @@ class DriveFunctionsUI(QDialog):
         gblayout.addRow(self.lbl_mime, self.combox_mime_type)
 
         # mimeType option
-        self.chbx_mime = QCheckBox("Type of file gets <mimeType> instead of <filename extension>?")
+        self.chbx_mime = QCheckBox("Type of item gets <mimeType> instead of <filename extension>?")
         self.chbx_mime.stateChanged.connect(self.chbx_mime_change)
         gblayout.addRow(self.chbx_mime)
 
@@ -183,7 +183,7 @@ class DriveFunctionsUI(QDialog):
         gblayout.addRow(self.lbl_date, self.de_date)
 
         # testing option
-        self.chbx_test = QCheckBox("REPORT the files found WITHOUT any actual deletions?")
+        self.chbx_test = QCheckBox("REPORT the items found WITHOUT any actual deletions?")
         gblayout.addRow(self.chbx_test)
 
         # save to json option
@@ -264,7 +264,7 @@ class DriveFunctionsUI(QDialog):
                      self.pb_filext, self.chbx_mime, self.chbx_test, self.de_date])
             ui_blank([self.lbl_drive_folder, self.lbl_mime, self.lbl_date, self.lbl_numitems, self.lbl_filext, self.lbl_fsend])
 
-        elif sf == self.fxn_keys[Fxns.DELETE_FILES]: # required: file type and date, drive folder, num files | option: test mode
+        elif sf == self.fxn_keys[Fxns.DELETE_ITEMS]: # required: file type and date, drive folder, num files | option: test mode
             self.combox_drive_folder.show()
             self.lbl_drive_folder.setText(DFOLDER_LABEL)
             self.pb_numitems.show()
@@ -281,7 +281,7 @@ class DriveFunctionsUI(QDialog):
                 self.combox_mime_type.hide()
                 self.lbl_mime.setText(BLANK_LABEL)
             self.de_date.show()
-            self.lbl_date.setText("Files older than:")
+            self.lbl_date.setText("Items older than:")
             self.chbx_mime.show()
             self.chbx_test.show()
             # OFF
@@ -334,16 +334,16 @@ class DriveFunctionsUI(QDialog):
     def get_filext(self):
         ft_choice, ok = QInputDialog.getText(self, self.fext_title, "File extension:")
         if ok:
-            self.lgr.info(f"File extension = '{ft_choice}'.")
-            self.fext_selected = ft_choice
-            self.pb_filext.setText(f"{self.fext_title} = {ft_choice}")
+            self.fext_selected = ft_choice.strip('.,"\';-_ \n')
+            self.lgr.info(f"File extension = '{self.fext_selected}'.")
+            self.pb_filext.setText(f"{self.fext_title} = '{self.fext_selected}'")
 
     def get_date(self):
         self.dt_selected = self.de_date.date().toString(Qt.DateFormat.ISODate)
         self.lgr.info(f"Date selected = '{self.dt_selected}'.")
 
     def get_num_items(self):
-        nimax = MAX_FILES_DELETE if self.selected_function == self.fxn_keys[Fxns.DELETE_FILES] else MAX_NUM_ITEMS
+        nimax = MAX_FILES_DELETE if self.selected_function == self.fxn_keys[Fxns.DELETE_ITEMS] else MAX_NUM_ITEMS
         items = "folders" if self.selected_function == self.fxn_keys[Fxns.GET_FOLDERS] else "files"
         fnum, ok = QInputDialog.getInt(self, f"Number of {items}", f"Enter a value (1-{nimax})",
                                        value = self.num_items, minValue = 1, maxValue = nimax)
@@ -375,34 +375,33 @@ class DriveFunctionsUI(QDialog):
             ftype = self.mime_type if (self.chbx_mime.isChecked() or not self.fext_selected) else self.fext_selected
             parent_folder = FOLDER_IDS[self.drive_folder]
             if sf == self.fxn_keys[Fxns.GET_FOLDERS]:
-                self.lgr.info(f"num files = {self.num_items}, parent Drive folder = {parent_folder}")
+                self.lgr.info(f"num folders = {self.num_items}, parent Drive folder = {parent_folder}")
                 reply = exe(uida, self.num_items, parent_folder)
             elif sf == self.fxn_keys[Fxns.GET_FILES]:
                 self.lgr.info(f"file type = {ftype}; num files = {self.num_items}; parent Drive folder = {parent_folder}")
                 reply = exe(uida, ftype, self.num_items, parent_folder)
             elif ( sf == self.fxn_keys[Fxns.SEND_FOLDER]
                   or sf == self.fxn_keys[Fxns.SEND_FILE] ):
+                forf = "folder" if sf == self.fxn_keys[Fxns.SEND_FOLDER] else "file"
                 if self.forf_selected is None:
-                    forf = "folder" if sf == self.fxn_keys[Fxns.SEND_FOLDER] else "file"
                     msg_box = QMessageBox()
                     msg_box.setIcon(QMessageBox.Icon.Warning)
                     msg_box.setText(f"MUST select a Drive {forf}!")
                     msg_box.exec()
                     uida.end_session()
                     return
-                self.lgr.info(f"file/folder = {self.forf_selected}; drive folder = {self.drive_folder}")
+                self.lgr.info(f"{forf} = {self.forf_selected}; parent Drive folder = {self.drive_folder}")
                 reply = exe(uida, self.forf_selected, parent_folder, self.drive_folder)
             elif sf == self.fxn_keys[Fxns.GET_METADATA]:
                 self.lgr.info(f"meta file = {self.meta_filename}")
                 reply = exe(uida, FILE_IDS[self.meta_filename])
-            elif sf == self.fxn_keys[Fxns.DELETE_FILES]:
-                self.lgr.info(f"drive folder = {self.drive_folder}; file type = {ftype}; "
+            elif sf == self.fxn_keys[Fxns.DELETE_ITEMS]:
+                self.lgr.info(f"Drive folder = {self.drive_folder}; file type = {ftype}; "
                                f"mime = {self.chbx_mime.isChecked()}; date = {self.dt_selected}")
                 if not self.chbx_test.isChecked():
                     confirm_box = QMessageBox()
                     confirm_box.setIcon(QMessageBox.Icon.Question)
                     confirm_box.setText("Are you SURE you want to DELETE the specified items?")
-                    # confirm_box.setInformativeText("Do you want to save your changes?")
                     confirm_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
                     confirm_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
                     if confirm_box.exec() == QMessageBox.StandardButton.Cancel:

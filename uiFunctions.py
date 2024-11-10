@@ -141,37 +141,37 @@ class UiDriveAccess:
             raise ffex
         return all_items
 
-    def delete_files(self, p_pid:str, p_filetype:str, p_filedate:str) -> list:
-        """DELETE selected files from my Google Drive
-        :param p_pid:      id of the parent folder on the drive, i.e. the folder to delete files from
-        :param p_filetype: type of file to find
-        :param p_filedate: find files OLDER than this date
+    def delete_items(self, p_pid:str, p_type:str, p_date:str) -> list:
+        """DELETE selected items *including folders* from my Google Drive
+        :param p_pid:  id of the parent folder on the drive, i.e. the folder to delete items from
+        :param p_type: type of item to find, including FOLDER
+        :param p_date: find items OLDER than this date
         :return list of: items deleted OR 'would have been' deleted; OR the 'no results' message
         """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
             return [NO_SESSION_MSG]
-        mimetype = FILE_MIME_TYPES[p_filetype] if self.mime else ""
-        items = self._find_items(p_date = p_filedate, p_pid = p_pid, p_mimetype = mimetype)
+        mimetype = FILE_MIME_TYPES[p_type] if self.mime else ""
+        items = self._find_items(p_date = p_date, p_pid = p_pid, p_mimetype = mimetype)
         results = []
         for item in items:
             fname = item['name']
             fid = item['id']
             fdate = item['modifiedTime']
             ftype = get_filetype(fname)[1:]
-            if self.mime or ftype == p_filetype:
+            if self.mime or ftype == p_type:
                 if self.test:
-                    result = f"Testing: Would have deleted file '{fname}' with date: {fdate}"
+                    result = f"Testing: Would have deleted item '{fname}' with date: {fdate}"
                 else:
                     response = self.service.delete(fileId = fid).execute()
-                    result = f"deleted '{fname}' with date '{fdate}' | response = '{response}'"
+                    result = f"deleted '{fname}' with date: {fdate} | response = '{response}'"
                 self.lgr.log(self.lev, result)
                 results.append(result)
                 if len(results) >= MAX_FILES_DELETE:
                     break
-        ftf = p_filetype if self.mime else f".{p_filetype}"
+        ftf = p_type if self.mime else f".{p_type}"
         if len(results) == 0:
-            results.append(f">> NO '{ftf}' files found.\n")
+            results.append(f">> NO '{ftf}' items found.\n")
         return results
 
     def send_folder(self, p_path:str, p_pid:str, p_parent:str) -> list:

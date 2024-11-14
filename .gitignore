@@ -2,6 +2,7 @@
 !.gitignore
 /gnucash
 /old
+/bak
 /info
 /send
 folder_ids.py

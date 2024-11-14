@@ -168,7 +168,7 @@ class UiDriveAccess:
                 else:
                     response = self.service.delete(fileId = fid).execute()
                     result = f"deleted '{fname}' with date: {fdate} | response = '{response}'"
-                self.lgr.log(self.lev, result)
+                self.lgr.debug(result)
                 results.append(result)
                 if len(results) >= p_numitems:
                     break
@@ -238,18 +238,19 @@ class UiDriveAccess:
             self.lgr.log(self.lev, f"{k}: '{v}'")
         return [file_metadata]
 
-    def get_file_info(self, p_ftype:str, p_numitems:int, p_pid:str = "") -> list:
+    def list_item_info(self, p_mtype:str, p_numitems:int, p_pid:str = "", p_name:str = "") -> list:
         """Read file info from my Google Drive.
-        :param p_ftype:    type of file to get info on
-        :param p_numitems: number of files to get
+        :param p_mtype:    mimeType of items to show info on
+        :param p_numitems: number of items to list
         :param p_pid:      id of parent folder on Drive
+        :param p_name:     string to search for in item names
         :return list of found items OR the 'no results' message
         """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
             return [NO_SESSION_MSG]
-        self.lgr.info(f"p_pid = {p_pid}; p_ftype = {p_ftype}; p_numitems = {p_numitems}")
-        mime = FILE_MIME_TYPES[p_ftype] if self.mime else ""
+        self.lgr.info(f"p_pid = {p_pid}; p_ftype = {p_mtype}; p_numitems = {p_numitems}")
+        mime = FILE_MIME_TYPES[p_mtype] if self.mime else ""
         fdate = "" if self.mime else DEFAULT_DATE
         limit = p_numitems if 1 < p_numitems < MAX_NUM_ITEMS else DEFAULT_NUM_ITEMS
         items = self._find_items(p_mimetype = mime, p_date = fdate, p_limit = limit, p_pid = p_pid)
@@ -274,12 +275,12 @@ class UiDriveAccess:
                     fname = f"{item['name']}"
                     # find the file type by using the filename extension
                     ftype = get_filetype(fname)[1:]
-                    if ftype == p_ftype:
+                    if ftype == p_mtype:
                         found_items.append(item)
             if len(found_items) >= p_numitems:
                 break
-        self.lgr.info(f"Found {len(found_items)} '{p_ftype}' files.")
-        return found_items if found_items else [f">> NO '{p_ftype}' files found!\n"]
+        self.lgr.info(f"Found {len(found_items)} '{p_mtype}' files.")
+        return found_items if found_items else [f">> NO '{p_mtype}' files found!\n"]
 
     def get_folder_info(self,  p_pid:str = "", p_numitems:int = DEFAULT_NUM_ITEMS) -> list:
         """Read folder info from my Google Drive.
@@ -299,3 +300,4 @@ class UiDriveAccess:
 
 if __name__ == "__main__":
     print("Access using UI ONLY!")
+    exit()

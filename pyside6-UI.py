@@ -30,7 +30,7 @@ REQD_LABEL:str         = "Required: "
 OPTION_LABEL:str       = "Option: "
 # CHOOSE_LABEL:str       = "Choose the "
 QPB_REQD_STYLE:str     = "QPushButton {font-weight: bold; background-color: cyan;}"
-LBL_BOLD_STYLE:str     = "QLabel {font-weight: bold; color: red;}"
+LBL_BOLD_STYLE:str     = "QLabel {font-weight: bold; color: blue;}"
 
 DEFAULT_QDATE  = QDate(2027,11,13)
 MIN_QDATE      = QDate(1970,1,1)
@@ -42,7 +42,7 @@ DRIVE_FUNCTIONS = {
     "Send local file"    :  UiDriveAccess.send_file,
     "Get file metadata"  :  UiDriveAccess.get_file_metadata,
     "List Drive items"   :  UiDriveAccess.list_item_info,
-    "DELETE Drive items" :  UiDriveAccess.delete_items
+    # "DELETE Drive items" :  UiDriveAccess.delete_items
     }
 
 def ui_hide(widgets:list):
@@ -59,7 +59,7 @@ class Fxns(IntEnum):
     SEND_FILE     = auto()
     GET_METADATA  = auto()
     LIST_ITEMS    = auto()
-    DELETE_ITEMS  = auto()
+    # DELETE_ITEMS  = auto()
 
 # noinspection PyAttributeOutsideInit
 class DriveFunctionsUI(QDialog):
@@ -168,7 +168,7 @@ class DriveFunctionsUI(QDialog):
         # self.chbx_mime.stateChanged.connect(self.chbx_mime_change)
         # gblayout.addRow(self.chbx_mime)
 
-        # target date for deletions
+        # target date
         self.de_date = QDateEdit(date = DEFAULT_QDATE, parent = self)
         self.de_date.setMinimumDate(MIN_QDATE)
         self.de_date.setMaximumDate(MAX_QDATE)
@@ -177,9 +177,10 @@ class DriveFunctionsUI(QDialog):
         self.lbl_date = QLabel()
         gblayout.addRow(self.lbl_date, self.de_date)
 
-        # testing option
-        # self.chbx_test = QCheckBox("REPORT the items found WITHOUT any actual deletions?")
-        # gblayout.addRow(self.chbx_test)
+        # delete option
+        self.chbx_delete = QCheckBox("DELETE the items found?")
+        self.chbx_delete.setStyleSheet("QCheckBox {font-weight: bold; color: red;}")
+        gblayout.addRow(self.chbx_delete)
 
         # get metadata of a Drive file
         self.meta_keys = list(FILE_IDS.keys())
@@ -239,14 +240,15 @@ class DriveFunctionsUI(QDialog):
             self.combox_drive_folder.addItems(self.to_folder_keys)
             self.lbl_drive_folder.setText(TO_FOLDER_LABEL)
             # OFF
-            ui_hide([self.combox_meta_file, self.combox_mime_type, self.pb_numitems, self.pb_search, self.de_date])
+            ui_hide([self.combox_meta_file, self.combox_mime_type, self.pb_numitems, self.pb_search, self.de_date, self.chbx_delete])
             ui_blank([self.lbl_meta, self.lbl_mime, self.lbl_numitems, self.lbl_search, self.lbl_date])
 
         elif sf == self.fxn_keys[Fxns.GET_METADATA]: # required: name of file to query
             self.combox_meta_file.show()
             self.lbl_meta.setText("Metadata file:")
             # OFF
-            ui_hide([self.combox_drive_folder, self.pb_fsend, self.combox_mime_type, self.pb_numitems, self.pb_search, self.de_date])
+            ui_hide([self.combox_drive_folder, self.pb_fsend, self.combox_mime_type, self.pb_numitems,
+                     self.pb_search, self.de_date, self.chbx_delete])
             ui_blank([self.lbl_drive_folder, self.lbl_mime, self.lbl_date, self.lbl_numitems, self.lbl_search, self.lbl_fsend])
 
         # elif sf == self.fxn_keys[Fxns.LIST_ITEMS]:  # option: number of files
@@ -271,8 +273,8 @@ class DriveFunctionsUI(QDialog):
             # ui_hide([self.pb_fsend, self.combox_meta_file, self.chbx_test, self.de_date])
             # ui_blank([self.lbl_meta, self.lbl_date, self.lbl_fsend])
 
-        elif (sf == self.fxn_keys[Fxns.LIST_ITEMS] or
-              sf == self.fxn_keys[Fxns.DELETE_ITEMS]): # required: file type and date, drive folder, num files | option: test mode
+        elif sf == self.fxn_keys[Fxns.LIST_ITEMS]:
+            # or sf == self.fxn_keys[Fxns.DELETE_ITEMS]):
             self.combox_drive_folder.show()
             self.drive_folder = self.from_folder_keys[0]
             self.combox_drive_folder.clear()
@@ -288,7 +290,7 @@ class DriveFunctionsUI(QDialog):
             self.lbl_search.setText(OPTION_LABEL)
             self.de_date.show()
             self.lbl_date.setText("Items older than:")
-            # self.chbx_test.show()
+            self.chbx_delete.show()
             # self.chbx_mime.setChecked(True)
             # OFF
             ui_hide([self.combox_meta_file, self.pb_fsend])
@@ -355,7 +357,7 @@ class DriveFunctionsUI(QDialog):
         self.lgr.info(f"Date selected = '{self.dt_selected}'.")
 
     def get_num_items(self):
-        nimax = MAX_FILES_DELETE if self.selected_function == self.fxn_keys[Fxns.DELETE_ITEMS] else MAX_NUM_ITEMS
+        nimax = MAX_FILES_DELETE if self.chbx_delete.isChecked() else MAX_NUM_ITEMS
         # items = "folders" if self.selected_function == self.fxn_keys[Fxns.LIST_FOLDERS] else "files"
         fnum, ok = QInputDialog.getInt(self, f"Number of items", f"Enter a value (1-{nimax})",
                                        value = self.num_items, minValue = 1, maxValue = nimax)
@@ -379,8 +381,8 @@ class DriveFunctionsUI(QDialog):
         uida = None
         exe = DRIVE_FUNCTIONS[sf]
         try:
-            self.lgr.info(f"save = {self.chbx_save.isChecked()}; mime = {True}; test = {True}")
-            uida = UiDriveAccess(self.chbx_save.isChecked(), True, True, log_control, self.fxn_log_level)
+            self.lgr.info(f"save = {self.chbx_save.isChecked()}; delete = {self.chbx_delete.isChecked()}")
+            uida = UiDriveAccess(self.chbx_save.isChecked(), self.chbx_delete.isChecked(), log_control, self.fxn_log_level)
             uida.begin_session()
             self.lgr.debug(repr(uida))
             parent_id = FOLDER_IDS[self.drive_folder]
@@ -407,41 +409,43 @@ class DriveFunctionsUI(QDialog):
                 reply = exe(uida, FILE_IDS[self.meta_filename])
 
             elif sf == self.fxn_keys[Fxns.LIST_ITEMS]:
-                ftype = self.mime_type # if (self.chbx_mime.isChecked() or not self.search_selected) else self.search_selected
-                self.lgr.info(f"file type = {ftype}; num items = {self.num_items}; parent Drive folder = {parent_id}")
-                reply = exe(uida, ftype, self.num_items, parent_id)
-
-            elif sf == self.fxn_keys[Fxns.DELETE_ITEMS]:
+                # ftype = self.mime_type if (self.chbx_mime.isChecked() or not self.search_selected) else self.search_selected
+                # self.lgr.info(f"file type = {self.mime_type }; num items = {self.num_items}; parent Drive folder = {parent_id}")
                 self.lgr.info(f"Drive folder = {self.drive_folder}; mimeType = {self.mime_type}; search name = {self.search_selected}; "
                               f"date = {self.dt_selected}; p_numitems = {self.num_items}")
+                # reply = exe(uida, self.drive_folder, self.mime_type, self.dt_selected, self.search_selected, self.num_items)
+
+            # elif sf == self.fxn_keys[Fxns.DELETE_ITEMS]:
+            #     self.lgr.info(f"Drive folder = {self.drive_folder}; mimeType = {self.mime_type}; search name = {self.search_selected}; "
+            #                   f"date = {self.dt_selected}; p_numitems = {self.num_items}")
                 # uida.mime = True
-                # if not self.chbx_test.isChecked():
-                confirm_box = QMessageBox()
-                confirm_box.setIcon(QMessageBox.Icon.Question)
-                confirm_box.setText("Are you SURE you want to DELETE the specified items?")
-                proceed_button = confirm_box.addButton("PROCEED!", QMessageBox.ButtonRole.ActionRole)
-                report_button = confirm_box.addButton("Report items ONLY", QMessageBox.ButtonRole.ActionRole)
-                cancel_button = confirm_box.addButton("Cancel", QMessageBox.ButtonRole.ActionRole)
-                # confirm_box.setInformativeText("Deletions will proceed if you answer 'Yes'!")
-                # confirm_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
-                confirm_box.setDefaultButton(cancel_button)
-                confirm_box.exec()
-                if confirm_box.clickedButton() == proceed_button:
-                    self.lgr.info("pressed Proceed")
-                    uida.test = False
-                elif confirm_box.clickedButton() == report_button:
-                    self.lgr.info("pressed Report")
-                elif confirm_box.clickedButton() == cancel_button:
-                    self.lgr.info("pressed Cancel")
-                    return
-                # if confirm_box.exec() == QMessageBox.StandardButton.Cancel:
-                #     uida.end_session()
-                #     return
-                reply = exe(uida, parent_id, self.mime_type, self.dt_selected, self.search_selected, self.num_items)
+                if self.chbx_delete.isChecked():
+                    confirm_box = QMessageBox()
+                    confirm_box.setIcon(QMessageBox.Icon.Question)
+                    confirm_box.setText("Are you SURE you want to DELETE the specified items?")
+                    proceed_button = confirm_box.addButton("PROCEED!", QMessageBox.ButtonRole.ActionRole)
+                    report_button = confirm_box.addButton("Report items ONLY", QMessageBox.ButtonRole.ActionRole)
+                    cancel_button = confirm_box.addButton("Cancel", QMessageBox.ButtonRole.ActionRole)
+                    # confirm_box.setInformativeText("Deletions will proceed if you answer 'Yes'!")
+                    # confirm_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+                    confirm_box.setDefaultButton(cancel_button)
+                    confirm_box.exec()
+                    if confirm_box.clickedButton() == proceed_button:
+                        self.lgr.info("pressed Proceed")
+                    elif confirm_box.clickedButton() == report_button:
+                        uida.delete = False
+                        self.lgr.info("pressed Report")
+                    elif confirm_box.clickedButton() == cancel_button:
+                        self.lgr.info("pressed Cancel")
+                        return
+                    # if confirm_box.exec() == QMessageBox.StandardButton.Cancel:
+                    #     uida.end_session()
+                    #     return
+                reply = exe(uida, self.drive_folder, self.mime_type, self.dt_selected, self.search_selected, self.num_items)
             else:
                 raise Exception("?? INVALID Function Choice??!!")
             for r in reply:
-                self.lgr.info(r)
+                self.lgr.debug(r)
         except Exception as bce:
             self.response_box.append(f"\nEXCEPTION:\n{repr(bce)}\n")
             raise bce

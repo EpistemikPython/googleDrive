@@ -73,10 +73,9 @@ def get_creds(p_lgr:lg.Logger):
 
 class UiDriveAccess:
     """Start a locked session, read/write to my google drive, end the session."""
-    def __init__(self, p_save:bool, p_mime:bool, p_test:bool, p_lgctrl:MhsLogger, p_level:int = DEFAULT_LOG_LEVEL):
+    def __init__(self, p_save:bool, p_delete:bool, p_lgctrl:MhsLogger, p_level:int = DEFAULT_LOG_LEVEL):
         self.save = p_save
-        self.mime = p_mime
-        self.test = p_test
+        self.delete = p_delete
         self.lgr = p_lgctrl.get_logger()
         self.lev = p_level
         # prevent different instances/threads from writing at the same time
@@ -99,7 +98,7 @@ class UiDriveAccess:
             self._lock.release()
             self.lgr.debug(f"released Drive lock at: {get_current_time()}")
 
-    def _find_items(self, p_mimetype:str= "", p_date:str= "", p_pid:str= "", p_limit:int=0) -> list:
+    def _find_items(self, p_mimetype:str = "", p_date:str = "", p_pid:str = "", p_limit:int = 100, p_search:str = "") -> list:
         """Find the specified items on my Google drive.
         :param p_mimetype: mimeType of files to retrieve
         :param p_date:     find files OLDER than this date
@@ -117,6 +116,8 @@ class UiDriveAccess:
             iquery = f"{iquery} and modifiedTime < '{p_date}'" if iquery else f"modifiedTime < '{p_date}'"
         if p_pid:
             iquery = f"{iquery} and '{p_pid}' in parents" if iquery else f"'{p_pid}' in parents"
+        # if p_search:
+            # iquery = f"{iquery} and '{p_search}' in name" if iquery else f"'{p_search}' in name"
         if not iquery:
             self.lgr.warning("No Query parameters!")
             return []
@@ -140,42 +141,6 @@ class UiDriveAccess:
         except Exception as ffex:
             raise ffex
         return all_items
-
-    def delete_items(self, p_pid:str, p_mtype:str, p_date:str, p_name:str = "", p_numitems:int = 1) -> list:
-        """DELETE selected items *including folders* from my Google Drive
-        :param p_pid:   id of the parent folder on the drive, i.e. the folder to delete items from
-        :param p_mtype: mimeType of item to find, including FOLDER
-        :param p_date:  find items OLDER than this date
-        :param p_name:  string to search for in names of found items
-        :param p_numitems: number of items to delete
-        :return list of: items deleted OR 'would have been' deleted; OR the 'no results' message
-        """
-        if not self.service:
-            self.lgr.warning(NO_SESSION_MSG)
-            return [NO_SESSION_MSG]
-        self.lgr.info(f"p_pid = {p_pid}; p_mtype = {p_mtype}, p_date = {p_date}, p_name = {p_name}")
-        # mimetype = FILE_MIME_TYPES[p_type] if self.mime else ""
-        items = self._find_items(p_date = p_date, p_pid = p_pid, p_mimetype = FILE_MIME_TYPES[p_mtype])
-        results = []
-        for item in items:
-            fname = item['name']
-            fid = item['id']
-            fdate = item['modifiedTime']
-            # ftype = get_filetype(fname)[1:]
-            if p_name in fname:
-                if self.test:
-                    result = f"Testing: Would have deleted item '{fname}' with date: {fdate}"
-                else:
-                    response = self.service.delete(fileId = fid).execute()
-                    result = f"deleted '{fname}' with date: {fdate} | response = '{response}'"
-                self.lgr.debug(result)
-                results.append(result)
-                if len(results) >= p_numitems:
-                    break
-        # ftf = p_type if self.mime else f".{p_type}"
-        if len(results) == 0:
-            results.append(f">> Found NO '{p_mtype}' items with '{p_name}' in name.\n")
-        return results
 
     def send_folder(self, p_path:str, p_pid:str, p_parent:str) -> list:
         """Send ALL the files in a local folder to my Google drive.
@@ -238,49 +203,76 @@ class UiDriveAccess:
             self.lgr.log(self.lev, f"{k}: '{v}'")
         return [file_metadata]
 
-    def list_item_info(self, p_mtype:str, p_numitems:int, p_pid:str = "", p_name:str = "") -> list:
-        """Read file info from my Google Drive.
-        :param p_mtype:    mimeType of items to show info on
-        :param p_numitems: number of items to list
-        :param p_pid:      id of parent folder on Drive
-        :param p_name:     string to search for in item names
+    def list_item_info(self, p_target:str, p_mtype:str, p_date:str, p_search:str = "", p_numitems:int = 1) -> list:
+        """Read info from my Google Drive.
+        :param p_target:   name of the target folder on the drive
+        :param p_mtype:    mimeType of item to find, including FOLDER
+        :param p_date:     find items OLDER than this date
+        :param p_search:   string to search for in names of found items
+        :param p_numitems: number of items to find
         :return list of found items OR the 'no results' message
         """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
             return [NO_SESSION_MSG]
-        self.lgr.info(f"p_pid = {p_pid}; p_ftype = {p_mtype}; p_numitems = {p_numitems}")
-        mime = FILE_MIME_TYPES[p_mtype] if self.mime else ""
-        fdate = "" if self.mime else DEFAULT_DATE
+        self.lgr.info(f"target = {p_target}; mtype = {p_mtype}; date = {p_date}; search = {p_search}; numitems = {p_numitems}")
         limit = p_numitems if 1 < p_numitems < MAX_NUM_ITEMS else DEFAULT_NUM_ITEMS
-        items = self._find_items(p_mimetype = mime, p_date = fdate, p_limit = limit, p_pid = p_pid)
+        items = self._find_items(p_mimetype = FILE_MIME_TYPES[p_mtype], p_date = p_date, p_limit = limit,
+                                 p_pid = FOLDER_IDS[p_target], p_search = p_search)
         if not items:
             self.lgr.warning(NO_RESULTS_MSG)
             return [NO_RESULTS_MSG]
         self.lgr.log(self.lev, f"{len(items)} files retrieved.\n\t\t\t\tName\t\t\t<type>\t\t(Id)\t\t+Size+\t\t|modTime|\t\t\t\t\t\t[parent id]")
         found_items = []
         for item in items:
-            # exclude folders
-            if item['mimeType'] != "application/vnd.google-apps.folder":
-                try:
-                    # items 'shared with me' are in my Drive but WITHOUT a parent
-                    self.lgr.debug(f"{item['name']}\t\t<{item['mimeType']}>\t\t({item['id']})\t\t+{item['size']}+"
-                                   f"\t\t|{item['modifiedTime']}|\t\t{item['parents'] if 'parents' in item.keys() else '[*** NONE ***]'}")
-                except KeyError as lke:
-                    self.lgr.warning(f"{repr(lke)} for file '{item['name']}' with mimeType '{item['mimeType']}'")
-                if self.mime:
-                    # all the files are of the queried mimeType
+            try:
+                if p_search in item['name']:
                     found_items.append(item)
-                else:
-                    fname = f"{item['name']}"
-                    # find the file type by using the filename extension
-                    ftype = get_filetype(fname)[1:]
-                    if ftype == p_mtype:
-                        found_items.append(item)
+                    self.lgr.info(f"{item['name']}\t\t<{item['mimeType']}>\t\t({item['id']})\t\t+{item['size']}+"
+                                  f"\t\t|{item['modifiedTime']}|\t\t{item['parents']}")
+            except KeyError as lke:
+                # items 'shared with me' are in my Drive but WITHOUT a parent, some Google types do not report the size, etc
+                self.lgr.warning(f"{repr(lke)} for file '{item['name']}' with mimeType '{item['mimeType']}'")
             if len(found_items) >= p_numitems:
                 break
-        self.lgr.info(f"Found {len(found_items)} '{p_mtype}' files.")
-        return found_items if found_items else [f">> NO '{p_mtype}' files found!\n"]
+        self.lgr.info(f"Found {len(found_items)} '{p_mtype}' files with '{p_search}' in the name.")
+        return found_items if found_items else [f">> NO '{p_mtype}' '*{p_search}*' files found!\n"]
+
+    def delete_items(self, p_pid:str, p_mtype:str, p_date:str, p_name:str = "", p_numitems:int = 1) -> list:
+        """DELETE selected items *including folders* from my Google Drive
+        :param p_pid:      id of the parent folder on the drive, i.e. the folder to delete items from
+        :param p_mtype:    mimeType of item to find, including FOLDER
+        :param p_date:     find items OLDER than this date
+        :param p_name:     string to search for in names of found items
+        :param p_numitems: number of items to delete
+        :return list of: items deleted OR 'would have been' deleted; OR the 'no results' message
+        """
+        if not self.service:
+            self.lgr.warning(NO_SESSION_MSG)
+            return [NO_SESSION_MSG]
+        self.lgr.info(f"p_pid = {p_pid}; p_mtype = {p_mtype}, p_date = {p_date}, p_name = {p_name}")
+        # mimetype = FILE_MIME_TYPES[p_type] if self.mime else ""
+        items = self._find_items(p_date = p_date, p_pid = p_pid, p_mimetype = FILE_MIME_TYPES[p_mtype])
+        results = []
+        for item in items:
+            fname = item['name']
+            fid = item['id']
+            fdate = item['modifiedTime']
+            # ftype = get_filetype(fname)[1:]
+            if p_name in fname:
+                if self.delete:
+                    result = f"Testing: Would have deleted item '{fname}' with date: {fdate}"
+                else:
+                    response = self.service.delete(fileId = fid).execute()
+                    result = f"deleted '{fname}' with date: {fdate} | response = '{response}'"
+                self.lgr.debug(result)
+                results.append(result)
+                if len(results) >= p_numitems:
+                    break
+        # ftf = p_type if self.mime else f".{p_type}"
+        if len(results) == 0:
+            results.append(f">> Found NO '{p_mtype}' items with '{p_name}' in name.\n")
+        return results
 
     def get_folder_info(self,  p_pid:str = "", p_numitems:int = DEFAULT_NUM_ITEMS) -> list:
         """Read folder info from my Google Drive.

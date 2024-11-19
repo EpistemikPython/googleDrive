@@ -13,7 +13,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.151.0"
 __created__ = "2021-05-14"
-__updated__ = "2024-11-11"
+__updated__ = "2024-11-18"
 
 from sys import path
 import os
@@ -34,12 +34,11 @@ from folder_ids import *
 # see https://github.com/googleapis/google-api-python-client/issues/299
 lg.getLogger("googleapiclient.discovery_cache").setLevel(lg.ERROR)
 
-JSON_TOKEN = f"token.json"
-CREDENTIALS_FILE:str    = osp.join(SECRETS_DIR, f"credentials.json")
+JSON_TOKEN = "token.json"
+CREDENTIALS_FILE:str    = osp.join(SECRETS_DIR, "credentials.json")
 DRIVE_TOKEN_PATH:str    = osp.join(SECRETS_DIR, JSON_TOKEN)
 DRIVE_ACCESS_SCOPE:list = ["https://www.googleapis.com/auth/drive"]
 
-DEFAULT_DATE       = "2027-11-13"
 NO_SESSION_MSG     = "No Session!"
 NO_RESULTS_MSG     = "No items found."
 MAX_FILES_DELETE   = 500
@@ -98,7 +97,25 @@ class UiDriveAccess:
             self._lock.release()
             self.lgr.debug(f"released Drive lock at: {get_current_time()}")
 
-    def _find_items(self, p_mimetype:str = "", p_date:str = "", p_pid:str = "", p_limit:int = 100, p_search:str = "") -> list:
+    def _delete_items(self, p_items:list) -> list:
+        """DELETE the submitted items *including folders* from my Google Drive
+        :param p_items: items to delete
+        :return list of items deleted OR the 'no results' message
+        """
+        if not self.delete:
+            self.lgr.warning("Delete NOT activated.")
+        if p_items:
+            results = []
+            items = p_items if len(p_items) <= MAX_FILES_DELETE else p_items[:MAX_FILES_DELETE]
+            for item in items:
+                response = self.service.delete(fileId = item['id']).execute()
+                result = f"Delete '{item['name']}' with date: {item['modifiedTime']} >> response = '{response}'"
+                self.lgr.info(result)
+                results.append(result)
+            return results
+        return [NO_RESULTS_MSG]
+
+    def _find_items(self, p_mimetype:str = "", p_date:str = "", p_pid:str = "", p_limit:int = 100) -> list:
         """Find the specified items on my Google drive.
         :param p_mimetype: mimeType of files to retrieve
         :param p_date:     find files OLDER than this date
@@ -106,9 +123,6 @@ class UiDriveAccess:
         :param p_limit:    number of items to retrieve
         :return  list of items retrieved
         """
-        if not self.service:
-            self.lgr.warning(NO_SESSION_MSG)
-            return [NO_SESSION_MSG]
         iquery = None
         if p_mimetype:
             iquery = f"mimeType='{p_mimetype}'"
@@ -116,8 +130,6 @@ class UiDriveAccess:
             iquery = f"{iquery} and modifiedTime < '{p_date}'" if iquery else f"modifiedTime < '{p_date}'"
         if p_pid:
             iquery = f"{iquery} and '{p_pid}' in parents" if iquery else f"'{p_pid}' in parents"
-        # if p_search:
-            # iquery = f"{iquery} and '{p_search}' in name" if iquery else f"'{p_search}' in name"
         if not iquery:
             self.lgr.warning("No Query parameters!")
             return []
@@ -192,7 +204,7 @@ class UiDriveAccess:
         return [response]
 
     def get_file_metadata(self, p_file_id:str) -> list:
-        """ :param p_file_id:  id of the Drive file to get info from
+        """ :param p_file_id: id of the Drive file to get info from
             :return  list of returned metadata  """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
@@ -217,8 +229,7 @@ class UiDriveAccess:
             return [NO_SESSION_MSG]
         self.lgr.info(f"target = {p_target}; mtype = {p_mtype}; date = {p_date}; search = {p_search}; numitems = {p_numitems}")
         limit = p_numitems if 1 < p_numitems < MAX_NUM_ITEMS else DEFAULT_NUM_ITEMS
-        items = self._find_items(p_mimetype = FILE_MIME_TYPES[p_mtype], p_date = p_date, p_limit = limit,
-                                 p_pid = FOLDER_IDS[p_target], p_search = p_search)
+        items = self._find_items(p_mimetype = FILE_MIME_TYPES[p_mtype], p_date = p_date, p_limit = limit, p_pid = FOLDER_IDS[p_target])
         if not items:
             self.lgr.warning(NO_RESULTS_MSG)
             return [NO_RESULTS_MSG]
@@ -236,57 +247,9 @@ class UiDriveAccess:
             if len(found_items) >= p_numitems:
                 break
         self.lgr.info(f"Found {len(found_items)} '{p_mtype}' files with '{p_search}' in the name.")
+        if self.delete and found_items:
+            return self._delete_items(found_items)
         return found_items if found_items else [f">> NO '{p_mtype}' '*{p_search}*' files found!\n"]
-
-    def delete_items(self, p_pid:str, p_mtype:str, p_date:str, p_name:str = "", p_numitems:int = 1) -> list:
-        """DELETE selected items *including folders* from my Google Drive
-        :param p_pid:      id of the parent folder on the drive, i.e. the folder to delete items from
-        :param p_mtype:    mimeType of item to find, including FOLDER
-        :param p_date:     find items OLDER than this date
-        :param p_name:     string to search for in names of found items
-        :param p_numitems: number of items to delete
-        :return list of: items deleted OR 'would have been' deleted; OR the 'no results' message
-        """
-        if not self.service:
-            self.lgr.warning(NO_SESSION_MSG)
-            return [NO_SESSION_MSG]
-        self.lgr.info(f"p_pid = {p_pid}; p_mtype = {p_mtype}, p_date = {p_date}, p_name = {p_name}")
-        # mimetype = FILE_MIME_TYPES[p_type] if self.mime else ""
-        items = self._find_items(p_date = p_date, p_pid = p_pid, p_mimetype = FILE_MIME_TYPES[p_mtype])
-        results = []
-        for item in items:
-            fname = item['name']
-            fid = item['id']
-            fdate = item['modifiedTime']
-            # ftype = get_filetype(fname)[1:]
-            if p_name in fname:
-                if self.delete:
-                    result = f"Testing: Would have deleted item '{fname}' with date: {fdate}"
-                else:
-                    response = self.service.delete(fileId = fid).execute()
-                    result = f"deleted '{fname}' with date: {fdate} | response = '{response}'"
-                self.lgr.debug(result)
-                results.append(result)
-                if len(results) >= p_numitems:
-                    break
-        # ftf = p_type if self.mime else f".{p_type}"
-        if len(results) == 0:
-            results.append(f">> Found NO '{p_mtype}' items with '{p_name}' in name.\n")
-        return results
-
-    def get_folder_info(self,  p_pid:str = "", p_numitems:int = DEFAULT_NUM_ITEMS) -> list:
-        """Read folder info from my Google Drive.
-        :param p_numitems: number of files to get
-        :param p_pid:      id of parent folder on Drive
-        :return list of found items OR the 'no results' message
-        """
-        if not self.service:
-            self.lgr.warning(NO_SESSION_MSG)
-            return [NO_SESSION_MSG]
-        folders = self._find_items(p_mimetype = FILE_MIME_TYPES["google folder"], p_pid = p_pid, p_limit = p_numitems)
-        for item in folders:
-            self.lgr.debug(f"{item['name']}\t\t<{item['id']}>\t\t({item['modifiedTime']})\t\t+{item['parents']}")
-        return folders if folders else [f">> NO folders found!\n"]
 # END class UiDriveAccess
 
 

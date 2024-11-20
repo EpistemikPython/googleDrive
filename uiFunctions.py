@@ -11,9 +11,9 @@
 __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
-__google_api_python_client_version__ = "2.151.0"
+__google_api_python_client_version__ = "2.153.0"
 __created__ = "2021-05-14"
-__updated__ = "2024-11-18"
+__updated__ = "2024-11-19"
 
 from sys import path
 import os
@@ -117,11 +117,11 @@ class UiDriveAccess:
 
     def _find_items(self, p_mimetype:str = "", p_date:str = "", p_pid:str = "", p_limit:int = 100) -> list:
         """Find the specified items on my Google drive.
-        :param p_mimetype: mimeType of files to retrieve
-        :param p_date:     find files OLDER than this date
+        :param p_mimetype: mimeType of items to find
+        :param p_date:     find items OLDER than this date
         :param p_pid:      id of the parent Drive folder to search in
-        :param p_limit:    number of items to retrieve
-        :return  list of items retrieved
+        :param p_limit:    number of items to find
+        :return  list of items found
         """
         iquery = None
         if p_mimetype:
@@ -134,7 +134,7 @@ class UiDriveAccess:
             self.lgr.warning("No Query parameters!")
             return []
 
-        limit = p_limit if p_limit and p_limit < MAX_NUM_ITEMS else DEFAULT_NUM_ITEMS
+        limit = p_limit if 1 <= p_limit <= MAX_NUM_ITEMS else DEFAULT_NUM_ITEMS
         self.lgr.log(self.lev, f"query = '{iquery}'; limit = '{limit}'")
         try:
             page_token = None
@@ -179,8 +179,8 @@ class UiDriveAccess:
 
     def send_file(self, p_path:str, p_pid:str, p_parent:str) -> list:
         """Send a local file to my Google drive.
-        :param p_path:   path to the local folder to send files from
-        :param p_pid:    id of the parent folder on the drive to send the files to
+        :param p_path:   path to the local folder to send file from
+        :param p_pid:    id of the parent folder on the drive to send the file to
         :param p_parent: name of the parent folder on the drive
         :return  response from Drive
         """
@@ -218,7 +218,7 @@ class UiDriveAccess:
     def list_item_info(self, p_target:str, p_mtype:str, p_date:str, p_search:str = "", p_numitems:int = 1) -> list:
         """Read info from my Google Drive.
         :param p_target:   name of the target folder on the drive
-        :param p_mtype:    mimeType of item to find, including FOLDER
+        :param p_mtype:    mimeType of item to find, including 'FOLDER'
         :param p_date:     find items OLDER than this date
         :param p_search:   string to search for in names of found items
         :param p_numitems: number of items to find
@@ -228,12 +228,12 @@ class UiDriveAccess:
             self.lgr.warning(NO_SESSION_MSG)
             return [NO_SESSION_MSG]
         self.lgr.info(f"target = {p_target}; mtype = {p_mtype}; date = {p_date}; search = {p_search}; numitems = {p_numitems}")
-        limit = p_numitems if 1 < p_numitems < MAX_NUM_ITEMS else DEFAULT_NUM_ITEMS
+        limit = p_numitems if 1 <= p_numitems <= MAX_NUM_ITEMS else DEFAULT_NUM_ITEMS
         items = self._find_items(p_mimetype = FILE_MIME_TYPES[p_mtype], p_date = p_date, p_limit = limit, p_pid = FOLDER_IDS[p_target])
         if not items:
             self.lgr.warning(NO_RESULTS_MSG)
             return [NO_RESULTS_MSG]
-        self.lgr.log(self.lev, f"{len(items)} files retrieved.\n\t\t\t\tName\t\t\t<type>\t\t(Id)\t\t+Size+\t\t|modTime|\t\t\t\t\t\t[parent id]")
+        self.lgr.log(self.lev, f"{len(items)} items retrieved.\n\t\t\t\tName\t\t\t<type>\t\t(Id)\t\t+Size+\t\t|modTime|\t\t\t\t\t\t[parent id]")
         found_items = []
         for item in items:
             try:
@@ -243,13 +243,13 @@ class UiDriveAccess:
                                   f"\t\t|{item['modifiedTime']}|\t\t{item['parents']}")
             except KeyError as lke:
                 # items 'shared with me' are in my Drive but WITHOUT a parent, some Google types do not report the size, etc
-                self.lgr.warning(f"{repr(lke)} for file '{item['name']}' with mimeType '{item['mimeType']}'")
+                self.lgr.warning(f"{repr(lke)} for item '{item['name']}' with mimeType '{item['mimeType']}'")
             if len(found_items) >= p_numitems:
                 break
-        self.lgr.info(f"Found {len(found_items)} '{p_mtype}' files with '{p_search}' in the name.")
+        self.lgr.info(f"Found {len(found_items)} '{p_mtype}' items with '{p_search}' in the name.")
         if self.delete and found_items:
             return self._delete_items(found_items)
-        return found_items if found_items else [f">> NO '{p_mtype}' '*{p_search}*' files found!\n"]
+        return found_items if found_items else [f">> NO '{p_mtype}' '*{p_search}*' items found!\n"]
 # END class UiDriveAccess
 
 

@@ -11,7 +11,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __pyQt_version__   = "6.8+"
 __created__ = "2024-10-11"
-__updated__ = "2024-11-18"
+__updated__ = "2024-11-19"
 
 from sys import argv
 from enum import IntEnum, auto
@@ -24,7 +24,7 @@ from uiFunctions import *
 BLANK_LABEL:str        = " "
 FROM_FOLDER_LABEL:str  = "from Drive folder:"
 TO_FOLDER_LABEL:str    = "to Drive folder:"
-MIME_LABEL:str         = "Mime type:"
+MIME_LABEL:str         = "Mime Type:"
 NUMITEMS_LABEL:str     = "Choose the number of items"
 REQD_LABEL:str         = "Required: "
 OPTION_LABEL:str       = "Option: "
@@ -56,6 +56,19 @@ class Fxns(IntEnum):
     GET_METADATA  = auto()
     LIST_ITEMS    = auto()
 
+def create_confirm_box():
+    confirm_box = QMessageBox()
+    confirm_box.setIcon(QMessageBox.Icon.Question)
+    confirm_box.setStyleSheet("QMessageBox {font-size: 16px}")
+    confirm_box.setText(" Are you SURE you want to DELETE the specified items?     ")
+    proceed_button = confirm_box.addButton(">> PROCEED!", QMessageBox.ButtonRole.ActionRole)
+    proceed_button.setStyleSheet("QAbstractButton {font-weight: bold; color: red; background-color: yellow}")
+    report_button = confirm_box.addButton("Just REPORT the items found.", QMessageBox.ButtonRole.ActionRole)
+    cancel_button = confirm_box.addButton("X  Cancel  X", QMessageBox.ButtonRole.ActionRole)
+    cancel_button.setStyleSheet("QAbstractButton {background-color: cyan}")
+    confirm_box.setDefaultButton(cancel_button)
+    return confirm_box, proceed_button, report_button, cancel_button
+
 # noinspection PyAttributeOutsideInit
 class DriveFunctionsUI(QDialog):
     """UI for choosing and running my Google Drive functions."""
@@ -77,10 +90,10 @@ class DriveFunctionsUI(QDialog):
 
         self.response_box = QTextEdit()
         self.response_box.setReadOnly(True)
-        self.response_box.setStyleSheet("QTextEdit {background-color: rgb(254, 254, 210);}")
+        self.response_box.setStyleSheet("QTextEdit {background-color: rgb(254, 254, 210)}")
         self.response_box.setText("Waiting... ;)")
         response_label = QLabel("Responses:")
-        response_label.setStyleSheet("QLabel {font-weight: bold; color: purple;}")
+        response_label.setStyleSheet("QLabel {font-weight: bold; color: purple}")
 
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         button_box.accepted.connect(self.accept)
@@ -95,7 +108,7 @@ class DriveFunctionsUI(QDialog):
 
     def create_group_box(self):
         self.gb_main = QGroupBox("Parameters")
-        self.gb_main.setStyleSheet("QGroupBox {font-weight: bold; color: purple;}")
+        self.gb_main.setStyleSheet("QGroupBox {font-weight: bold; color: purple}")
         gblayout = QFormLayout()
 
         # choose a function
@@ -105,7 +118,7 @@ class DriveFunctionsUI(QDialog):
         self.combox_fxn.addItems(self.fxn_keys)
         self.combox_fxn.currentIndexChanged.connect(self.fxn_change)
         self.lbl_fxn = QLabel("Function to run:")
-        self.lbl_fxn.setStyleSheet("QLabel {font-weight: bold; color: green;}")
+        self.lbl_fxn.setStyleSheet("QLabel {font-weight: bold; color: green}")
         gblayout.addRow(self.lbl_fxn, self.combox_fxn)
 
         # send local file or folder
@@ -113,7 +126,7 @@ class DriveFunctionsUI(QDialog):
         self.foldersend_title = "Get local folder"
         self.forf_selected = None
         self.pb_fsend = QPushButton()
-        self.pb_fsend.setStyleSheet("QPushButton {font-weight: bold; background-color: cyan;}")
+        self.pb_fsend.setStyleSheet("QPushButton {font-weight: bold; background-color: cyan}")
         self.pb_fsend.clicked.connect(self.open_forf_dialog)
         self.lbl_fsend = QLabel()
         self.lbl_fsend.setStyleSheet(LBL_BOLD_STYLE)
@@ -127,7 +140,7 @@ class DriveFunctionsUI(QDialog):
         self.lbl_drive_folder = QLabel()
         gblayout.addRow(self.lbl_drive_folder, self.combox_drive_folder)
 
-        # number of items to retrieve
+        # number of items to find
         self.num_items = DEFAULT_NUM_ITEMS
         self.pb_numitems = QPushButton()
         self.pb_numitems.clicked.connect(self.get_num_items)
@@ -163,7 +176,7 @@ class DriveFunctionsUI(QDialog):
 
         # delete option
         self.chbx_delete = QCheckBox("DELETE the items found?")
-        self.chbx_delete.setStyleSheet("QCheckBox {font-weight: bold; color: red;}")
+        self.chbx_delete.setStyleSheet("QCheckBox {font-weight: bold; color: red}")
         gblayout.addRow(self.chbx_delete)
 
         # get metadata of a Drive file
@@ -187,7 +200,7 @@ class DriveFunctionsUI(QDialog):
 
         # execute
         self.exe_btn = QPushButton("Go!")
-        self.exe_btn.setStyleSheet("QPushButton {font-weight: bold; color: yellow; background-color: red;}")
+        self.exe_btn.setStyleSheet("QPushButton {font-weight: bold; color: yellow; background-color: red}")
         self.exe_btn.clicked.connect(self.run_function)
         gblayout.addRow(self.exe_btn)
 
@@ -224,7 +237,7 @@ class DriveFunctionsUI(QDialog):
                      self.pb_search, self.de_date, self.chbx_delete])
             ui_blank([self.lbl_drive_folder, self.lbl_mime, self.lbl_date, self.lbl_numitems, self.lbl_search, self.lbl_fsend])
 
-        elif sf == self.fxn_keys[Fxns.LIST_ITEMS]:
+        elif sf == self.fxn_keys[Fxns.LIST_ITEMS]: # option: DELETE the items found
             self.combox_drive_folder.show()
             self.drive_folder = self.from_folder_keys[0]
             self.combox_drive_folder.clear()
@@ -334,14 +347,7 @@ class DriveFunctionsUI(QDialog):
                 self.lgr.info(f"Drive folder = {self.drive_folder}; mimeType = {self.mime_type}; search name = {self.search_selected}; "
                               f"date = {self.dt_selected}; p_numitems = {self.num_items}")
                 if self.chbx_delete.isChecked():
-                    confirm_box = QMessageBox()
-                    confirm_box.setIcon(QMessageBox.Icon.Question)
-                    confirm_box.setText("Are you SURE you want to DELETE the specified items?")
-                    proceed_button = confirm_box.addButton("PROCEED!", QMessageBox.ButtonRole.ActionRole)
-                    proceed_button.setStyleSheet("QAbstractButton {font-weight: bold; color: red; background-color: yellow;}")
-                    report_button = confirm_box.addButton("Just REPORT the items found.", QMessageBox.ButtonRole.ActionRole)
-                    cancel_button = confirm_box.addButton("> Cancel <", QMessageBox.ButtonRole.ActionRole)
-                    confirm_box.setDefaultButton(cancel_button)
+                    confirm_box, proceed_button, report_button, cancel_button = create_confirm_box()
                     confirm_box.exec()
                     if confirm_box.clickedButton() == proceed_button:
                         self.lgr.info("pressed Proceed")

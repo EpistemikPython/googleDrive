@@ -2,7 +2,7 @@
 # coding=utf-8
 #
 # uiFunctions.py
-#   -- UI calls functions to access my Google Drive
+#   -- UI calls these functions to access my Google Drive
 #
 # includes some code from Google quickstart examples
 #
@@ -13,7 +13,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.153.0"
 __created__ = "2021-05-14"
-__updated__ = "2024-11-19"
+__updated__ = "2024-11-23"
 
 from sys import path
 import os
@@ -109,8 +109,8 @@ class UiDriveAccess:
             items = p_items if len(p_items) <= MAX_FILES_DELETE else p_items[:MAX_FILES_DELETE]
             for item in items:
                 response = self.service.delete(fileId = item['id']).execute()
-                result = f"Delete '{item['name']}' with date: {item['modifiedTime']} >> response = '{response}'"
-                self.lgr.info(result)
+                result = f"Delete '{item['name']}' with date: {item['modifiedTime']}  >>  Response = '{response}'"
+                self.lgr.log(self.lev, result)
                 results.append(result)
             return results
         return [NO_RESULTS_MSG]
@@ -145,11 +145,10 @@ class UiDriveAccess:
                                              pageToken = page_token ).execute()
                 items = results.get("files", [])
                 all_items = all_items + items if all_items else items
-                self.lgr.log(self.lev, f"type(items) = {type(items)} \n page_token = {page_token}")
                 page_token = results.get("nextPageToken", None)
                 if page_token is None or len(all_items) >= limit:
                     break
-            self.lgr.log(self.lev, f">> Found {len(all_items)} items.\n")
+            self.lgr.debug(f">> Found {len(all_items)} items.\n")
         except Exception as ffex:
             raise ffex
         return all_items
@@ -188,10 +187,10 @@ class UiDriveAccess:
             self.lgr.warning(NO_SESSION_MSG)
             return [NO_SESSION_MSG]
         try:
-            mime_type = FILE_MIME_TYPES["txt"]
+            mime_type = FILE_MIME_TYPES["text"]
             f_type = get_filetype(p_path)
-            if f_type and f_type in FILE_MIME_TYPES.keys():
-                mime_type = FILE_MIME_TYPES[f_type]
+            if f_type and f_type in FILE_EXTENSIONS.keys():
+                mime_type = FILE_EXTENSIONS[f_type]
 
             file_metadata = {"name":get_filename(p_path), "parents":[p_pid]}
             media = MediaFileUpload(p_path, mimetype = mime_type, resumable = True)
@@ -227,8 +226,9 @@ class UiDriveAccess:
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
             return [NO_SESSION_MSG]
-        self.lgr.info(f"target = {p_target}; mtype = {p_mtype}; date = {p_date}; search = {p_search}; numitems = {p_numitems}")
+        self.lgr.log(self.lev, f"target = {p_target}; mtype = {p_mtype}; date = {p_date}; search = {p_search}; numitems = {p_numitems}")
         limit = p_numitems if 1 <= p_numitems <= MAX_NUM_ITEMS else DEFAULT_NUM_ITEMS
+
         items = self._find_items(p_mimetype = FILE_MIME_TYPES[p_mtype], p_date = p_date, p_limit = limit, p_pid = FOLDER_IDS[p_target])
         if not items:
             self.lgr.warning(NO_RESULTS_MSG)
@@ -239,14 +239,15 @@ class UiDriveAccess:
             try:
                 if p_search in item['name']:
                     found_items.append(item)
-                    self.lgr.info(f"{item['name']}\t\t<{item['mimeType']}>\t\t({item['id']})\t\t+{item['size']}+"
-                                  f"\t\t|{item['modifiedTime']}|\t\t{item['parents']}")
+                    self.lgr.log(self.lev, f"{item['name']}\t\t<{item['mimeType']}>\t\t({item['id']})\t\t+{item['size']}+"
+                                 f"\t\t|{item['modifiedTime']}|\t\t{item['parents']}")
             except KeyError as lke:
                 # items 'shared with me' are in my Drive but WITHOUT a parent, some Google types do not report the size, etc
                 self.lgr.warning(f"{repr(lke)} for item '{item['name']}' with mimeType '{item['mimeType']}'")
             if len(found_items) >= p_numitems:
                 break
-        self.lgr.info(f"Found {len(found_items)} '{p_mtype}' items with '{p_search}' in the name.")
+        self.lgr.log(self.lev, f"Found {len(found_items)} '{p_mtype}' items with '{p_search}' in the name.")
+
         if self.delete and found_items:
             return self._delete_items(found_items)
         return found_items if found_items else [f">> NO '{p_mtype}' '*{p_search}*' items found!\n"]

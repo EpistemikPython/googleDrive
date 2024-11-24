@@ -13,7 +13,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.153.0"
 __created__ = "2021-05-14"
-__updated__ = "2024-11-23"
+__updated__ = "2024-11-24"
 
 from sys import path
 import os
@@ -154,7 +154,7 @@ class UiDriveAccess:
         return all_items
 
     def send_folder(self, p_path:str, p_pid:str, p_parent:str) -> list:
-        """Send ALL the files in a local folder to my Google drive.
+        """Create a NEW folder in the specified parent and send ALL the files in the local folder there
         :param p_path:   path to the local folder to send files from
         :param p_pid:    id of the parent folder on the drive to send the files to
         :param p_parent: name of the parent folder on the drive
@@ -163,15 +163,27 @@ class UiDriveAccess:
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
             return [NO_SESSION_MSG]
-        responses = []
         try:
-            self.lgr.log(self.lev, f"Sending folder '{p_path}' to Drive://{p_parent}/")
-            fgw = glob.glob(p_path + osp.sep + '*')
-            for item in fgw:
+            # create the new folder in the parent folder
+            new_folder_name = get_base_filename(p_path)
+            folder_metadata = {
+                "name"     : new_folder_name,
+                "mimeType" : FILE_MIME_TYPES["google folder"],
+                "parents"  : [p_pid]
+            }
+            create_reply = self.service.create(body = folder_metadata, fields = "id").execute()
+            new_fldr_id = create_reply.get('id')
+            self.lgr.log(self.lev, f"New folder ID = '{new_fldr_id}'")
+
+            # send each file to the new Drive folder
+            responses = []
+            self.lgr.log(self.lev, f"Sending files in local folder '{p_path}' to Drive://{p_parent}/{new_folder_name}/")
+            sfg = glob.glob(p_path + osp.sep + '*')
+            for item in sfg:
                 if osp.isfile(item):
-                    reply = self.send_file(item, p_pid, p_parent)
-                    if reply:
-                        responses.append(reply)
+                    send_reply = self.send_file(item, new_fldr_id, f"{p_parent}/{new_folder_name}/")
+                    if send_reply:
+                        responses.append(send_reply)
         except Exception as sdex:
             raise sdex
         return responses if responses else [NO_RESULTS_MSG]

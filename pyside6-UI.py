@@ -2,7 +2,7 @@
 # coding=utf-8
 #
 # pyside6-UI.py
-#   -- use a PySide6 UI to run my Google Drive functions
+#   -- a PySide6 UI to access my Google Drive functions
 #
 # Copyright (c) 2024 Mark Sattolo <epistemik@gmail.com>
 
@@ -11,7 +11,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __pyQt_version__   = "6.8+"
 __created__ = "2024-10-11"
-__updated__ = "2024-11-19"
+__updated__ = "2024-11-22"
 
 from sys import argv
 from enum import IntEnum, auto
@@ -86,7 +86,9 @@ class DriveFunctionsUI(QDialog):
         self.height = 720
         self.setGeometry(self.left, self.top, self.width, self.height)
 
-        self.create_group_box()
+        grpbox = self.create_group_box()
+        # ensure all the proper widgets are shown or hidden from the start
+        self.fxn_change()
 
         self.response_box = QTextEdit()
         self.response_box.setReadOnly(True)
@@ -100,15 +102,15 @@ class DriveFunctionsUI(QDialog):
         button_box.rejected.connect(self.reject)
 
         qvb_layout = QVBoxLayout()
-        qvb_layout.addWidget(self.gb_main)
+        qvb_layout.addWidget(grpbox)
         qvb_layout.addWidget(response_label)
         qvb_layout.addWidget(self.response_box)
         qvb_layout.addWidget(button_box, alignment = Qt.AlignmentFlag.AlignAbsolute)
         self.setLayout(qvb_layout)
 
     def create_group_box(self):
-        self.gb_main = QGroupBox("Parameters")
-        self.gb_main.setStyleSheet("QGroupBox {font-weight: bold; color: purple}")
+        gb_main = QGroupBox("Parameters")
+        gb_main.setStyleSheet("QGroupBox {font-weight: bold; color: purple}")
         gblayout = QFormLayout()
 
         # choose a function
@@ -117,9 +119,9 @@ class DriveFunctionsUI(QDialog):
         self.combox_fxn = QComboBox()
         self.combox_fxn.addItems(self.fxn_keys)
         self.combox_fxn.currentIndexChanged.connect(self.fxn_change)
-        self.lbl_fxn = QLabel("Function to run:")
-        self.lbl_fxn.setStyleSheet("QLabel {font-weight: bold; color: green}")
-        gblayout.addRow(self.lbl_fxn, self.combox_fxn)
+        lbl_fxn = QLabel("Function to run:")
+        lbl_fxn.setStyleSheet("QLabel {font-weight: bold; color: green}")
+        gblayout.addRow(lbl_fxn, self.combox_fxn)
 
         # send local file or folder
         self.filesend_title = "Get local file"
@@ -156,10 +158,10 @@ class DriveFunctionsUI(QDialog):
         gblayout.addRow(self.lbl_search, self.pb_search)
 
         # specify mimeType
-        self.mime_keys = list(FILE_MIME_TYPES.keys())
-        self.mime_type = self.mime_keys[0]
+        mime_keys = list(FILE_MIME_TYPES.keys())
+        self.mime_type = mime_keys[0]
         self.combox_mime_type = QComboBox()
-        self.combox_mime_type.addItems(self.mime_keys)
+        self.combox_mime_type.addItems(mime_keys)
         self.combox_mime_type.currentIndexChanged.connect(self.mime_change)
         self.lbl_mime = QLabel()
         self.lbl_mime.setStyleSheet(LBL_BOLD_STYLE)
@@ -180,10 +182,10 @@ class DriveFunctionsUI(QDialog):
         gblayout.addRow(self.chbx_delete)
 
         # get metadata of a Drive file
-        self.meta_keys = list(FILE_IDS.keys())
-        self.meta_filename = self.meta_keys[0]
+        meta_keys = list(FILE_IDS.keys())
+        self.meta_filename = meta_keys[0]
         self.combox_meta_file = QComboBox()
-        self.combox_meta_file.addItems(self.meta_keys)
+        self.combox_meta_file.addItems(meta_keys)
         self.combox_meta_file.currentIndexChanged.connect(self.meta_change)
         self.lbl_meta = QLabel()
         gblayout.addRow(self.lbl_meta, self.combox_meta_file)
@@ -199,14 +201,13 @@ class DriveFunctionsUI(QDialog):
         gblayout.addRow(self.pb_logging)
 
         # execute
-        self.exe_btn = QPushButton("Go!")
-        self.exe_btn.setStyleSheet("QPushButton {font-weight: bold; color: yellow; background-color: red}")
-        self.exe_btn.clicked.connect(self.run_function)
-        gblayout.addRow(self.exe_btn)
+        exe_btn = QPushButton("Go!")
+        exe_btn.setStyleSheet("QPushButton {font-weight: bold; color: yellow; background-color: red}")
+        exe_btn.clicked.connect(self.run_function)
+        gblayout.addRow(exe_btn)
 
-        self.gb_main.setLayout(gblayout)
-        # ensure all the proper widgets are shown or hidden from the start
-        self.fxn_change()
+        gb_main.setLayout(gblayout)
+        return gb_main
 
     def fxn_change(self):
         """Show the appropriate parameter selection widgets according to which function is chosen."""
@@ -317,12 +318,14 @@ class DriveFunctionsUI(QDialog):
     def run_function(self):
         """Prepare the parameters and call the selected function of uiFunctions.UiDriveAccess."""
         sf = self.selected_function
-        self.lgr.info(f">> Run function '{sf}'")
+        self.lgr.info(f">> Run function '{sf}' <<")
+        saving = self.chbx_save.isChecked()
+        deleting = self.chbx_delete.isChecked()
+        self.lgr.info(f"saving = {saving}; deleting = {deleting}")
         uida = None
         exe = DRIVE_FUNCTIONS[sf]
         try:
-            self.lgr.info(f"save = {self.chbx_save.isChecked()}; delete = {self.chbx_delete.isChecked()}")
-            uida = UiDriveAccess(self.chbx_save.isChecked(), self.chbx_delete.isChecked(), log_control, self.fxn_log_level)
+            uida = UiDriveAccess(saving, deleting, log_control, self.fxn_log_level)
             uida.begin_session()
             self.lgr.debug(repr(uida))
             parent_id = FOLDER_IDS[self.drive_folder]
@@ -346,7 +349,7 @@ class DriveFunctionsUI(QDialog):
             elif sf == self.fxn_keys[Fxns.LIST_ITEMS]:
                 self.lgr.info(f"Drive folder = {self.drive_folder}; mimeType = {self.mime_type}; search name = {self.search_selected}; "
                               f"date = {self.dt_selected}; p_numitems = {self.num_items}")
-                if self.chbx_delete.isChecked():
+                if deleting:
                     confirm_box, proceed_button, report_button, cancel_button = create_confirm_box()
                     confirm_box.exec()
                     if confirm_box.clickedButton() == proceed_button:

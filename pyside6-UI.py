@@ -11,7 +11,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __pyQt_version__   = "6.8+"
 __created__ = "2024-10-11"
-__updated__ = "2024-11-22"
+__updated__ = "2024-11-26"
 
 from sys import argv
 from enum import IntEnum, auto
@@ -38,7 +38,7 @@ MAX_QDATE      = QDate(2099,12,31)
 DRIVE_FUNCTIONS = {
     "Send local folder"  :  UiDriveAccess.send_folder,
     "Send local file"    :  UiDriveAccess.send_file,
-    "Get file metadata"  :  UiDriveAccess.get_file_metadata,
+    "Get item metadata"  :  UiDriveAccess.get_item_metadata,
     "List Drive items"   :  UiDriveAccess.list_item_info,
     }
 
@@ -56,7 +56,7 @@ class Fxns(IntEnum):
     GET_METADATA  = auto()
     LIST_ITEMS    = auto()
 
-def create_confirm_box():
+def deletion_confirm_box():
     confirm_box = QMessageBox()
     confirm_box.setIcon(QMessageBox.Icon.Question)
     confirm_box.setStyleSheet("QMessageBox {font-size: 16px}")
@@ -149,8 +149,9 @@ class DriveFunctionsUI(QDialog):
         self.lbl_numitems = QLabel()
         gblayout.addRow(self.lbl_numitems, self.pb_numitems)
 
-        # specify search string
+        # specify a search string OR enter a Drive Id to get metadata from
         self.search_title = "String to search in item names"
+        self.id_title = "Drive Id of the requested item."
         self.search_selected = ""
         self.pb_search = QPushButton()
         self.pb_search.clicked.connect(self.get_search_string)
@@ -181,11 +182,11 @@ class DriveFunctionsUI(QDialog):
         self.chbx_delete.setStyleSheet("QCheckBox {font-weight: bold; color: red}")
         gblayout.addRow(self.chbx_delete)
 
-        # get metadata of a Drive file
-        meta_keys = list(FILE_IDS.keys())
-        self.meta_filename = meta_keys[0]
+        # get the metadata of a Drive item
+        self.meta_keys = list(FILE_IDS.keys())
+        self.meta_end = len(self.meta_keys) - 1
         self.combox_meta_file = QComboBox()
-        self.combox_meta_file.addItems(meta_keys)
+        self.combox_meta_file.addItems(self.meta_keys)
         self.combox_meta_file.currentIndexChanged.connect(self.meta_change)
         self.lbl_meta = QLabel()
         gblayout.addRow(self.lbl_meta, self.combox_meta_file)
@@ -231,6 +232,8 @@ class DriveFunctionsUI(QDialog):
             ui_blank([self.lbl_meta, self.lbl_mime, self.lbl_numitems, self.lbl_search, self.lbl_date])
 
         elif sf == self.fxn_keys[Fxns.GET_METADATA]:
+            self.meta_filename = self.meta_keys[0]
+            self.combox_meta_file.setCurrentIndex(0)
             self.combox_meta_file.show()
             self.lbl_meta.setText("Metadata file:")
             # OFF
@@ -251,6 +254,7 @@ class DriveFunctionsUI(QDialog):
             self.lbl_mime.setText(MIME_LABEL)
             self.pb_search.show()
             self.pb_search.setText(self.search_title)
+            self.pb_search.setStyleSheet("")
             self.lbl_search.setText(OPTION_LABEL)
             self.de_date.show()
             self.lbl_date.setText("Items older than:")
@@ -280,6 +284,14 @@ class DriveFunctionsUI(QDialog):
 
     def meta_change(self):
         self.meta_filename = self.combox_meta_file.currentText()
+        # enter a different Id if meta entry is 'Other'
+        if self.meta_filename == self.meta_keys[self.meta_end]:
+            self.pb_search.show()
+            self.pb_search.setText(self.id_title)
+            self.pb_search.setStyleSheet("QPushButton {font-weight: bold; background-color: cyan}")
+            self.lbl_search.setText(REQD_LABEL)
+        else:
+            self.pb_search.hide()
         self.lgr.info(f"Selected meta file changed to '{self.meta_filename}'")
 
     def mime_change(self):
@@ -287,10 +299,11 @@ class DriveFunctionsUI(QDialog):
         self.lgr.info(f"Selected mimeType changed to '{self.mime_type}'")
 
     def get_search_string(self):
-        ft_choice, ok = QInputDialog.getText(self, self.search_title, f"{self.search_title}:")
+        display_title = self.search_title if self.selected_function == self.fxn_keys[Fxns.LIST_ITEMS] else self.id_title
+        ft_choice, ok = QInputDialog.getText(self, display_title, f"{display_title}:")
         if ok:
             self.search_selected = ft_choice.strip(',/?!"\';\\:\n\r')
-            search_display = f"{self.search_title} = '{self.search_selected}'"
+            search_display = f"{display_title} = '{self.search_selected}'"
             self.lgr.info(search_display)
             self.pb_search.setText(search_display)
 
@@ -336,21 +349,32 @@ class DriveFunctionsUI(QDialog):
                 if self.forf_selected is None:
                     msg_box = QMessageBox()
                     msg_box.setIcon(QMessageBox.Icon.Warning)
-                    msg_box.setText(f"MUST select a Drive {forf}!")
+                    msg_box.setStyleSheet("QMessageBox {font-weight: bold; font-size: 16px}")
+                    msg_box.setText(f">> MUST select a Drive {forf}!")
                     msg_box.exec()
                     return
                 self.lgr.info(f"{forf} = {self.forf_selected}; parent Drive folder = {self.drive_folder}")
                 reply = exe(uida, self.forf_selected, parent_id, self.drive_folder)
 
             elif sf == self.fxn_keys[Fxns.GET_METADATA]:
-                self.lgr.info(f"meta file = {self.meta_filename}")
-                reply = exe(uida, FILE_IDS[self.meta_filename])
+                meta_id = FILE_IDS[self.meta_filename]
+                if self.meta_filename == self.meta_keys[self.meta_end]: # Other
+                    if not self.search_selected:
+                        msg_box = QMessageBox()
+                        msg_box.setIcon(QMessageBox.Icon.Warning)
+                        msg_box.setStyleSheet("QMessageBox {font-weight: bold; font-size: 16px}")
+                        msg_box.setText(">> MUST specify a Drive Id!")
+                        msg_box.exec()
+                        return
+                    meta_id = self.search_selected
+                self.lgr.info(f"meta file = {self.meta_filename}; meta file Id = {meta_id}")
+                reply = exe(uida, meta_id)
 
             elif sf == self.fxn_keys[Fxns.LIST_ITEMS]:
                 self.lgr.info(f"Drive folder = {self.drive_folder}; mimeType = {self.mime_type}; search name = {self.search_selected}; "
                               f"date = {self.dt_selected}; p_numitems = {self.num_items}")
                 if deleting:
-                    confirm_box, proceed_button, report_button, cancel_button = create_confirm_box()
+                    confirm_box, proceed_button, report_button, cancel_button = deletion_confirm_box()
                     confirm_box.exec()
                     if confirm_box.clickedButton() == proceed_button:
                         self.lgr.info("pressed Proceed")

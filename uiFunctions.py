@@ -13,7 +13,7 @@ __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.153.0"
 __created__ = "2021-05-14"
-__updated__ = "2024-11-24"
+__updated__ = "2024-11-26"
 
 from sys import path
 import os
@@ -214,13 +214,13 @@ class UiDriveAccess:
             raise sfex
         return [response]
 
-    def get_file_metadata(self, p_file_id:str) -> list:
-        """ :param p_file_id: id of the Drive file to get info from
+    def get_item_metadata(self, p_item_id:str) -> list:
+        """ :param p_item_id: id of the Drive item to get info from
             :return  list of returned metadata  """
         if not self.service:
             self.lgr.warning(NO_SESSION_MSG)
             return [NO_SESSION_MSG]
-        file_metadata = self.service.get(fileId = p_file_id, fields = '*').execute()
+        file_metadata = self.service.get(fileId = p_item_id, fields = '*').execute()
         self.lgr.log(self.lev, f"\n\t\t\t\t\t\t{file_metadata['name']} data:")
         for k, v in file_metadata.items():
             self.lgr.log(self.lev, f"{k}: '{v}'")

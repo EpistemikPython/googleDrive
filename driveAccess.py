@@ -11,10 +11,10 @@
 __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.11+"
-__google_api_python_client_version__ = "2.149.0"
+__google_api_python_client_version__ = "2.154.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2021-05-14"
-__updated__ = "2024-10-11"
+__updated__ = "2024-11-26"
 
 import logging
 from sys import argv, path
@@ -34,7 +34,7 @@ from mhsLogging import get_simple_logger, MhsLogger, DEFAULT_LOG_FOLDER, DEFAULT
 from mhsUtils import *
 SECRETS_DIR:str = osp.join(BASE_PYTHON_FOLDER, f"google{osp.sep}drive{osp.sep}secrets")
 path.append(SECRETS_DIR)
-from folder_ids import FOLDER_IDS
+from folder_ids import *
 
 # see https://github.com/googleapis/google-api-python-client/issues/299
 lg.getLogger("googleapiclient.discovery_cache").setLevel(lg.ERROR)
@@ -47,24 +47,6 @@ DRIVE_ACCESS_SCOPE:list = ["https://www.googleapis.com/auth/drive"]
 DEFAULT_FILETYPE  = "txt"
 DEFAULT_NUM_FILES = 100
 MAX_NUM_FILES     = 800
-FILE_MIME_TYPE = {
-    "txt"     : "text/plain" ,
-    "info"    : "text/plain" ,
-    "gnc"     : "application/x-gnucash" ,
-    "gnucash" : "application/x-gnucash" ,
-    "gcm"     : "application/octet-stream" , # gnucash metafile
-    "gfldr"   : "application/vnd.google-apps.folder" ,
-    "gdoc"    : "application/vnd.google-apps.document" ,
-    "gsht"    : "application/vnd.google-apps.spreadsheet" ,
-    "odt"     : "application/vnd.oasis.opendocument.text" ,
-    "ods"     : "application/vnd.oasis.opendocument.spreadsheet",
-    "mp3"     : "audio/mpeg",
-    "mp4"     : "video/mp4",
-    "mpeg"    : "video/mpeg",
-    "avi"     : "video/x-msvideo",
-    "jpg"     : "image/jpeg",
-    "jpeg"    : "image/jpeg"
-}
 FOLDERS_LABEL   = "folders"
 GET_FILES_LABEL = "getfiles"
 METADATA_LABEL  = "metadata"
@@ -119,45 +101,41 @@ class MhsDriveAccess:
             self._lock.release()
             self._lgr.info(f"released Drive lock at: {get_current_time()}")
 
-    def send_folder(self, fpath:str, wildcard:str = '*'):
+    def send_folder(self, p_fpath:str, p_wildcard:str = '*'):
         """SEND the files in a folder to my Google drive."""
-        self._lgr.debug(get_current_time())
         if not self.service:
             self._lgr.warning("No Session!")
             return
         num_sent = 0
         try:
-            fgw = glob.glob(fpath + osp.sep + wildcard)
+            fgw = glob.glob(p_fpath+osp.sep+p_wildcard)
             for item in fgw:
                 if osp.isfile(item) and get_base_filename(item) != REFERENCE_FILE:
                     self.send_file(item)
                     num_sent += 1
         except Exception as sfdex:
             raise sfdex
+        self._lgr.info(f"Sent {num_sent} files to folder '{parent}' @ {get_current_time()}.")
 
-        self._lgr.info(f"Sent {num_sent} files to folder '{parent}'.")
-
-    def send_file(self, filepath:str) -> str:
+    def send_file(self, p_filepath:str) -> str:
         """SEND a file to my Google drive
         :return server response """
         if not self.service:
             self._lgr.warning("No Session!")
-            return ''
+            return ""
         try:
-            mime_type = FILE_MIME_TYPE["txt"]
-            f_type = get_filetype(filepath)
-            if f_type and f_type in FILE_MIME_TYPE.keys():
-                mime_type = FILE_MIME_TYPE[f_type]
-
-            file_metadata = {"name":get_filename(filepath), "parents":[pid]}
-            media = MediaFileUpload(filepath, mimetype = mime_type, resumable = True)
-            self._lgr.info(f"Sending file '{filepath}' to Drive://{parent}/")
+            mime_type = FILE_EXTENSIONS["txt"]
+            f_type = get_filetype(p_filepath)
+            if f_type and f_type in FILE_EXTENSIONS.keys():
+                mime_type = FILE_EXTENSIONS[f_type]
+            file_metadata = {"name":get_filename(p_filepath), "parents":[pid]}
+            media = MediaFileUpload(p_filepath, mimetype = mime_type, resumable = True)
+            self._lgr.info(f"Sending file '{p_filepath}' to Drive://*/{parent}/")
             file = self.service.create(body = file_metadata, media_body = media, fields = "id").execute()
             response = file.get("id")
             self._lgr.info(f"Success: Google Id = {response}")
         except Exception as sfex:
             raise sfex
-
         return response
 
     def get_file_metadata(self, p_filename:str, p_file_id:str):
@@ -172,7 +150,7 @@ class MhsDriveAccess:
             self._lgr.warning("No Session!")
             return
         try:
-            mtype = FILE_MIME_TYPE[p_ftype] if p_mime else FILE_MIME_TYPE[DEFAULT_FILETYPE]
+            mtype = FILE_EXTENSIONS[p_ftype] if p_mime else FILE_EXTENSIONS[DEFAULT_FILETYPE]
             results = self.service.list(q = f"mimeType='{mtype}'", spaces = "drive",
                                         pageSize = p_numitems, fields = "files(name, id, parents, mimeType)").execute()
             items = results.get("files", [])
@@ -210,7 +188,7 @@ class MhsDriveAccess:
             return
         try:
             page_token = None
-            mime_type = FILE_MIME_TYPE["gfldr"]
+            mime_type = FILE_EXTENSIONS["gfldr"]
             all_items = []
             self._lgr.info("Folders:")
             while True:
@@ -245,7 +223,7 @@ def main_drive():
     # get files
     elif choice == GET_FILES_LABEL:
         if mime_option:
-            lgr.info(f"retrieve info from up to {numfiles} 'mimeType = {FILE_MIME_TYPE[filetype]}' files.")
+            lgr.info(f"retrieve info from up to {numfiles} 'mimeType = {FILE_EXTENSIONS[filetype]}' files.")
         else:
             lgr.info(f"retrieve info from {numfiles} files and search for filename extension '{filetype}'.")
         mhsda.read_file_info(filetype, numfiles, mime_option)
@@ -323,10 +301,10 @@ def process_input_parameters(argx:list):
 if __name__ == "__main__":
     start_time = dt.now()
     try:
-        save_option, choice, parent, pid, filetype, mime_option, numfiles, meta_id, logloc = process_input_parameters(argv[1:])
-        log_control = MhsLogger(get_base_filename(__file__), con_level = DEFAULT_LOG_LEVEL, folder = logloc)
+        save_option, choice, parent, pid, filetype, mime_option, numfiles, meta_id, loglocn = process_input_parameters(argv[1:])
+        log_control = MhsLogger(get_base_filename(__file__), con_level = DEFAULT_LOG_LEVEL, folder = loglocn)
         lgr = log_control.get_logger()
-        lgr.info(f"save option = {save_option}, choice = '{choice}', log location = {logloc}")
+        lgr.info(f"save option = {save_option}, choice = '{choice}', log location = {loglocn}")
     except Exception as lex:
         print(f">>Problem: {repr(lex)}")
         lgr = get_simple_logger(get_base_filename(__file__))
@@ -354,5 +332,4 @@ if __name__ == "__main__":
 
     run_time = (dt.now() - start_time).total_seconds()
     lgr.info(f"\nRunning time = {(run_time // 60)} minutes, {(run_time % 60):2.4} seconds\n")
-
     exit(code)

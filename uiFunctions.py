@@ -6,14 +6,14 @@
 #
 # includes some code from Google quickstart examples
 #
-# Copyright (c) 2024 Mark Sattolo <epistemik@gmail.com>
+# Copyright (c) 2025 Mark Sattolo <epistemik@gmail.com>
 
 __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __google_api_python_client_version__ = "2.153.0"
 __created__ = "2021-05-14"
-__updated__ = "2024-11-26"
+__updated__ = "2025-07-31"
 
 from sys import path
 import os
@@ -254,8 +254,9 @@ class UiDriveAccess:
                     self.lgr.log(self.lev, f"{item['name']}\t\t<{item['mimeType']}>\t\t({item['id']})\t\t+{item['size']}+"
                                  f"\t\t|{item['modifiedTime']}|\t\t{item['parents']}")
             except KeyError as lke:
-                # items 'shared with me' are in my Drive but WITHOUT a parent, some Google types do not report the size, etc
-                self.lgr.warning(f"{repr(lke)} for item '{item['name']}' with mimeType '{item['mimeType']}'")
+                # e.g. items 'shared with me' are in my Drive but WITHOUT a parent,
+                # some Google types, like FOLDERS, do not report the size, etc
+                self.lgr.warning(f"{repr(lke)} for item '{item['name']}[{item['id']}]' with mimeType '{item['mimeType']}'")
             if len(found_items) >= p_numitems:
                 break
         self.lgr.log(self.lev, f"Found {len(found_items)} '{p_mtype}' items with '{p_search}' in the name.")

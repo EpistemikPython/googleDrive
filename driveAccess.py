@@ -6,7 +6,7 @@
 #
 # includes some code from Google quickstart examples
 #
-# Copyright (c) 2024 Mark Sattolo <epistemik@gmail.com>
+# Copyright (c) 2025 Mark Sattolo <epistemik@gmail.com>
 
 __author__         = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
@@ -14,7 +14,7 @@ __python_version__ = "3.11+"
 __google_api_python_client_version__ = "2.154.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2021-05-14"
-__updated__ = "2024-11-26"
+__updated__ = "2025-08-06"
 
 import logging
 from sys import argv, path
@@ -114,6 +114,7 @@ class MhsDriveAccess:
                     self.send_file(item)
                     num_sent += 1
         except Exception as sfdex:
+            self._lgr.exception(f"send_folder(): {sfdex}")
             raise sfdex
         self._lgr.info(f"Sent {num_sent} files to folder '{parent}' @ {get_current_time()}.")
 
@@ -135,6 +136,7 @@ class MhsDriveAccess:
             response = file.get("id")
             self._lgr.info(f"Success: Google Id = {response}")
         except Exception as sfex:
+            self._lgr.exception(f"send_file(): {sfex}")
             raise sfex
         return response
 
@@ -179,6 +181,7 @@ class MhsDriveAccess:
                 jfile = save_to_json(get_base_filename(argv[0]), found_items)
                 self._lgr.info(f"Saved results to '{jfile}'.")
         except Exception as rfex:
+            self._lgr.exception(f"read_file_info(): {rfex}")
             raise rfex
 
     def find_all_folders(self):
@@ -210,6 +213,7 @@ class MhsDriveAccess:
                 jfile = save_to_json(get_base_filename(argv[0]), all_items)
                 self._lgr.info(f"Saved results to '{jfile}'.")
         except Exception as ffex:
+            self._lgr.exception(f"find_all_folders(): {ffex}")
             raise ffex
 # END class MhsDriveAccess
 
@@ -292,9 +296,9 @@ def process_input_parameters(argx:list):
     if args.getfiles:
         num_files = DEFAULT_NUM_FILES if args.numfiles <= 0 or args.numfiles > MAX_NUM_FILES else args.numfiles
 
-    choic = FOLDERS_LABEL if args.folders else GET_FILES_LABEL if args.getfiles else METADATA_LABEL if args.metadata else args.send
+    fxn_choice = FOLDERS_LABEL if args.folders else GET_FILES_LABEL if args.getfiles else METADATA_LABEL if args.metadata else args.send
 
-    return ( args.jsonsave, choic, args.parent, parent_id, args.type, args.mimetype, num_files, args.id_of_file,
+    return ( args.jsonsave, fxn_choice, args.parent, parent_id, args.type, args.mimetype, num_files, args.id_of_file,
              args.log_location if args.log_location else DEFAULT_LOG_FOLDER )
 
 
@@ -304,9 +308,9 @@ if __name__ == "__main__":
         save_option, choice, parent, pid, filetype, mime_option, numfiles, meta_id, loglocn = process_input_parameters(argv[1:])
         log_control = MhsLogger(get_base_filename(__file__), con_level = DEFAULT_LOG_LEVEL, folder = loglocn)
         lgr = log_control.get_logger()
-        lgr.info(f"save option = {save_option}, choice = '{choice}', log location = {loglocn}")
+        lgr.info(f"save option = {save_option}, function choice = '{choice}', log location = {loglocn}")
     except Exception as lex:
-        print(f">>Problem: {repr(lex)}")
+        print(f">> Problem: {repr(lex)}")
         lgr = get_simple_logger(get_base_filename(__file__))
     mhsda = None
     code = 0

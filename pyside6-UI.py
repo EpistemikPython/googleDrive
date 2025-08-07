@@ -4,14 +4,14 @@
 # pyside6-UI.py
 #   -- a PySide6 UI to access my Google Drive functions
 #
-# Copyright (c) 2024 Mark Sattolo <epistemik@gmail.com>
+# Copyright (c) 2025 Mark Sattolo <epistemik@gmail.com>
 
 __author_name__    = "Mark Sattolo"
 __author_email__   = "epistemik@gmail.com"
 __python_version__ = "3.9+"
 __pyQt_version__   = "6.8+"
 __created__ = "2024-10-11"
-__updated__ = "2024-11-26"
+__updated__ = "2025-08-03"
 
 from sys import argv
 from enum import IntEnum, auto
@@ -35,12 +35,7 @@ DEFAULT_QDATE  = QDate(2027,11,13)
 MIN_QDATE      = QDate(1970,1,1)
 MAX_QDATE      = QDate(2099,12,31)
 
-DRIVE_FUNCTIONS = {
-    "Send local folder"  :  UiDriveAccess.send_folder,
-    "Send local file"    :  UiDriveAccess.send_file,
-    "Get item metadata"  :  UiDriveAccess.get_item_metadata,
-    "List Drive items"   :  UiDriveAccess.list_item_info,
-    }
+DRIVE_FUNCTIONS = ("Send local folder", "Send local file", "Get item metadata", "List Drive items")
 
 def ui_hide(widgets:list):
     for item in widgets:
@@ -55,6 +50,13 @@ class Fxns(IntEnum):
     SEND_FILE     = auto()
     GET_METADATA  = auto()
     LIST_ITEMS    = auto()
+
+def create_warning_box(msg_text:str):
+    wbox = QMessageBox()
+    wbox.setIcon(QMessageBox.Icon.Warning)
+    wbox.setStyleSheet("QMessageBox {font-weight: bold; font-size: 16px}")
+    wbox.setText(msg_text)
+    return wbox
 
 def deletion_confirm_box():
     confirm_box = QMessageBox()
@@ -114,7 +116,7 @@ class DriveFunctionsUI(QDialog):
         gblayout = QFormLayout()
 
         # choose a function
-        self.fxn_keys = list(DRIVE_FUNCTIONS.keys())
+        self.fxn_keys = DRIVE_FUNCTIONS
         self.selected_function = self.fxn_keys[0]
         self.combox_fxn = QComboBox()
         self.combox_fxn.addItems(self.fxn_keys)
@@ -336,39 +338,38 @@ class DriveFunctionsUI(QDialog):
         deleting = self.chbx_delete.isChecked()
         self.lgr.info(f"saving = {saving}; deleting = {deleting}")
         uida = None
-        exe = DRIVE_FUNCTIONS[sf]
         try:
             uida = UiDriveAccess(saving, deleting, log_control, self.fxn_log_level)
             uida.begin_session()
             self.lgr.debug(repr(uida))
             parent_id = FOLDER_IDS[self.drive_folder]
 
-            if ( sf == self.fxn_keys[Fxns.SEND_FOLDER]
-                 or sf == self.fxn_keys[Fxns.SEND_FILE] ):
-                forf = "folder" if sf == self.fxn_keys[Fxns.SEND_FOLDER] else "file"
+            if sf == self.fxn_keys[Fxns.SEND_FOLDER]:
                 if self.forf_selected is None:
-                    msg_box = QMessageBox()
-                    msg_box.setIcon(QMessageBox.Icon.Warning)
-                    msg_box.setStyleSheet("QMessageBox {font-weight: bold; font-size: 16px}")
-                    msg_box.setText(f">> MUST select a Drive {forf}!")
-                    msg_box.exec()
+                    warning_box = create_warning_box(">> MUST select a Drive folder!")
+                    warning_box.exec()
                     return
-                self.lgr.info(f"{forf} = {self.forf_selected}; parent Drive folder = {self.drive_folder}")
-                reply = exe(uida, self.forf_selected, parent_id, self.drive_folder)
+                self.lgr.info(f"Local folder = {self.forf_selected}; parent Drive folder = {self.drive_folder}")
+                reply = UiDriveAccess.send_folder(uida, self.forf_selected, parent_id, self.drive_folder)
+
+            elif sf == self.fxn_keys[Fxns.SEND_FILE]:
+                if self.forf_selected is None:
+                    warning_box = create_warning_box(">> MUST select a Drive file!")
+                    warning_box.exec()
+                    return
+                self.lgr.info(f"Local file = {self.forf_selected}; parent Drive folder = {self.drive_folder}")
+                reply = UiDriveAccess.send_file(uida, self.forf_selected, parent_id, self.drive_folder)
 
             elif sf == self.fxn_keys[Fxns.GET_METADATA]:
                 meta_id = FILE_IDS[self.meta_filename]
                 if self.meta_filename == self.meta_keys[self.meta_end]: # Other
                     if not self.search_selected:
-                        msg_box = QMessageBox()
-                        msg_box.setIcon(QMessageBox.Icon.Warning)
-                        msg_box.setStyleSheet("QMessageBox {font-weight: bold; font-size: 16px}")
-                        msg_box.setText(">> MUST specify a Drive Id!")
-                        msg_box.exec()
+                        warning_box = create_warning_box(">> MUST specify a Drive Id!")
+                        warning_box.exec()
                         return
                     meta_id = self.search_selected
                 self.lgr.info(f"meta file = {self.meta_filename}; meta file Id = {meta_id}")
-                reply = exe(uida, meta_id)
+                reply = UiDriveAccess.get_item_metadata(uida, meta_id)
 
             elif sf == self.fxn_keys[Fxns.LIST_ITEMS]:
                 self.lgr.info(f"Drive folder = {self.drive_folder}; mimeType = {self.mime_type}; search name = {self.search_selected}; "
@@ -384,22 +385,24 @@ class DriveFunctionsUI(QDialog):
                     elif confirm_box.clickedButton() == cancel_button:
                         self.lgr.info("pressed Cancel")
                         return
-                reply = exe(uida, self.drive_folder, self.mime_type, self.dt_selected, self.search_selected, self.num_items)
+                reply = UiDriveAccess.list_item_info(uida, self.drive_folder, self.mime_type, self.dt_selected,
+                                                     self.search_selected, self.num_items)
             else:
                 raise Exception("?? INVALID Function Choice??!!")
-            for r in reply:
-                self.lgr.debug(r)
+            if reply:
+                for r in reply:
+                    self.lgr.debug(r)
+                response = {"response":reply}
+                if uida.save:
+                    self.lgr.info(f"Saved results to '{save_to_json(basename, response)}'.")
+                self.response_box.append(json.dumps(response, indent = 4))
         except Exception as rfe:
             self.response_box.append(f"\nEXCEPTION:\n{repr(rfe)}\n")
             raise rfe
         finally:
             if uida:
                 uida.end_session()
-        if reply:
-            response = {"response":reply}
-            if uida.save:
-                self.lgr.info(f"Saved results to '{save_to_json(basename, response)}'.")
-            self.response_box.append(json.dumps(response, indent = 4))
+            self.lgr.info("END run_function()")
 # END class DriveFunctionsUI
 
 

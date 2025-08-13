@@ -14,7 +14,7 @@ __python_version__ = "3.11+"
 __google_api_python_client_version__ = "2.154.0"
 __google_auth_oauthlib_version__     = "1.2.1"
 __created__ = "2021-05-14"
-__updated__ = "2025-08-06"
+__updated__ = "2025-08-11"
 
 import logging
 from sys import argv, path
@@ -90,8 +90,7 @@ class MhsDriveAccess:
         """Activate a UNIQUE session to the drive."""
         self._lock.acquire()
         self._lgr.info(f"acquired Drive lock at: {get_current_time()}")
-        creds = get_credentials()
-        service = build("drive", "v3", credentials = creds)
+        service = build("drive", "v3", credentials = get_credentials())
         self.service = service.files()
 
     def end_session(self):
@@ -141,10 +140,18 @@ class MhsDriveAccess:
         return response
 
     def get_file_metadata(self, p_filename:str, p_file_id:str):
-        file_metadata = self.service.get(fileId = p_file_id).execute()
-        self._lgr.info(f"file '{p_filename}' metadata:")
-        for item in file_metadata:
-            self._lgr.info(f"\t{item}: {file_metadata[item]}")
+        """Get metadata from a file on my Google drive."""
+        if not self.service:
+            self._lgr.warning("No Session!")
+            return
+        try:
+            file_metadata = self.service.get(fileId = p_file_id).execute()
+            self._lgr.info(f"file '{p_filename}' metadata:")
+            for item in file_metadata:
+                self._lgr.info(f"\t{item}: {file_metadata[item]}")
+        except Exception as fmex:
+            self._lgr.exception(f"get_file_metadata(): {fmex}")
+            raise fmex
 
     def read_file_info(self, p_ftype:str, p_numitems:int, p_mime:bool):
         """Read file info from my Google drive."""
